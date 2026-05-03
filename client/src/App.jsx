@@ -6,11 +6,13 @@ import Ideas from './pages/Ideas';
 import Insights from './pages/Insights';
 import IdeaDetail from './pages/IdeaDetail';
 import Login from './pages/Login';
-import Register from './pages/Register';
 import Landing from './pages/Landing';
+
 import IdeasTable from './pages/IdeasTable';
 import TeamStructure from './pages/TeamStructure';
 import VoiceIdeas from './pages/VoiceIdeas';
+import ActionPoints from './pages/ActionPoints';
+
 
 /** Redirects authenticated users away from public-only pages */
 function PublicRoute({ children }) {
@@ -32,6 +34,16 @@ function ProtectedRoute({ children }) {
   if (loading) return <LoadingScreen />;
   return user ? children : <Navigate to="/login" replace />;
 }
+
+/** Blocks non-admin users — redirects admins-only pages */
+function AdminRoute({ children }) {
+  const { user, loading } = useAuth();
+  if (loading) return <LoadingScreen />;
+  if (!user) return <Navigate to="/login" replace />;
+  if (user.role !== 'admin') return <Navigate to="/ideas" replace />;
+  return children;
+}
+
 
 function LoadingScreen() {
   return (
@@ -76,9 +88,6 @@ export default function App() {
             <Route path="/login" element={
               <PublicRoute><Login /></PublicRoute>
             } />
-            <Route path="/register" element={
-              <PublicRoute><Register /></PublicRoute>
-            } />
 
             <Route path="/ideas" element={<BaseRoute><Ideas /></BaseRoute>} />
             <Route path="/ideas/:id" element={<BaseRoute><IdeaDetail /></BaseRoute>} />
@@ -86,6 +95,13 @@ export default function App() {
             <Route path="/insights" element={<BaseRoute><Insights /></BaseRoute>} />
             <Route path="/voice-ideas" element={<BaseRoute><VoiceIdeas /></BaseRoute>} />
             <Route path="/team-structure" element={<BaseRoute><TeamStructure  /></BaseRoute>} />
+
+            {/* ── Admin-only Routes ─────────────────────────────── */}
+            <Route
+              path="/action-points"
+              element={<AdminRoute><ActionPoints /></AdminRoute>}
+            />
+
 
             {/* ── Fallback ──────────────────────────────── */}
             <Route path="*" element={<Navigate to="/" replace />} />

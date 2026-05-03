@@ -26,3 +26,7 @@ logs
 server/uploads/
 
 server/database/app.db
+
+*.db
+*.db-shm
+*.db-wal

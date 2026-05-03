@@ -1,6 +1,6 @@
 /**
- * StatusBadge — only the 4 valid statuses that exist in the Mongoose enum:
- * 'Submitted' | 'Approved' | 'In Progress' | 'Implemented'
+ * StatusBadge — valid statuses:
+ * 'Submitted' | 'Approved' | 'In Progress' | 'Testing/Validating' | 'Implemented' | 'Rejected'
  */
 const statusConfig = {
   Submitted: {
@@ -21,6 +21,12 @@ const statusConfig = {
     border: 'border-amber-200',
     dot:    'bg-amber-500',
   },
+  'Testing/Validating': {
+    bg:     'bg-purple-50',
+    text:   'text-purple-700',
+    border: 'border-purple-200',
+    dot:    'bg-purple-500',
+  },
   Implemented: {
     bg:     'bg-green-50',
     text:   'text-green-700',
@@ -34,6 +40,7 @@ const statusConfig = {
     dot:    'bg-rose-500',
   },
 };
+
 
 /** Fall back to Submitted styling if an unrecognised value arrives */
 const fallback = statusConfig.Submitted;

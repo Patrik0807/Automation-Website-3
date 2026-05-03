@@ -1,4 +1,56 @@
 const db = require('../config/db');
+const ideaMutex = require('../utils/mutex');
+const { deleteFiles } = require('../utils/fileHelper');
+
+// Ordered pipeline stages
+const PIPELINE_STAGES = [
+  'Submitted',
+  'Approved',
+  'In Progress',
+  'Testing/Validating',
+  'Implemented',
+  'Rejected'
+];
+
+/**
+ * Build a default pipeline from current status.
+ * All stages up to and including currentStatus are marked completed.
+ */
+function buildDefaultPipeline(currentStatus, submissionDate) {
+  const idx = PIPELINE_STAGES.indexOf(currentStatus);
+  return PIPELINE_STAGES.map((stage, i) => ({
+    status: stage,
+    completed: i <= idx,
+    completedAt: i <= idx ? (i === 0 ? submissionDate : null) : null,
+    deadline: null
+  }));
+}
+
+/** Parse statusPipeline JSON safely, auto-generate if missing. 
+ *  Includes automatic backwards-compatibility to inject Rejected if an old idea lacks it.
+ */
+function parsePipeline(pipelineJson, currentStatus, submissionDate) {
+  let pipeline = null;
+  if (pipelineJson) {
+    try { pipeline = JSON.parse(pipelineJson); } catch { /* fall through */ }
+  }
+  if (!pipeline) {
+    pipeline = buildDefaultPipeline(currentStatus || 'Submitted', submissionDate || new Date().toISOString());
+  }
+
+  // Graceful migration step: append 'Rejected' safely into an existing legacy payload
+  if (!pipeline.find(s => s.status === 'Rejected')) {
+    pipeline.push({
+      status: 'Rejected',
+      completed: currentStatus === 'Rejected',
+      completedAt: currentStatus === 'Rejected' ? new Date().toISOString() : null,
+      deadline: null
+    });
+  }
+
+  return pipeline;
+}
+
 
 // GET /api/ideas
 const getIdeas = (req, res) => {
@@ -35,25 +87,15 @@ const getIdeas = (req, res) => {
         return res.status(500).json({ message: err.message });
       }
 
-      const normalized = rows.map((row) => ({
+  const normalized = rows.map((row) => ({
         ...row,
         _id: String(row.id),
-
-        // ✅ ALWAYS an array
-        images: row.images
-          ? JSON.parse(row.images)
-          : [],
-
-        // ✅ ALWAYS an object
-        impact: row.impact
-          ? JSON.parse(row.impact)
-          : {},
-
-        // ✅ ALWAYS an array
-        statusHistory: row.statusHistory
-          ? JSON.parse(row.statusHistory)
-          : [],
+        images: row.images ? JSON.parse(row.images) : [],
+        impact: row.impact ? JSON.parse(row.impact) : {},
+        statusHistory: row.statusHistory ? JSON.parse(row.statusHistory) : [],
+        statusPipeline: parsePipeline(row.statusPipeline, row.status, row.createdAt),
       }));
+
 
       res.json(normalized);
     }
@@ -78,16 +120,12 @@ const getIdea = (req, res) => {
       res.json({
         ...row,
         _id: String(row.id),
-        images: row.images
-          ? JSON.parse(row.images)
-          : [],
-        impact: row.impact
-          ? JSON.parse(row.impact)
-          : {},
-        statusHistory: row.statusHistory
-          ? JSON.parse(row.statusHistory)
-          : [],
+        images: row.images ? JSON.parse(row.images) : [],
+        impact: row.impact ? JSON.parse(row.impact) : {},
+        statusHistory: row.statusHistory ? JSON.parse(row.statusHistory) : [],
+        statusPipeline: parsePipeline(row.statusPipeline, row.status, row.createdAt),
       });
+
     }
   );
 };
@@ -147,6 +185,11 @@ const createIdea = (req, res) => {
       updatedBy: submitterId
     }];
 
+    // Initialize pipeline: Submitted completed, rest pending
+    const initialPipeline = buildDefaultPipeline('Submitted', submissionDate);
+    // Set completedAt for Submitted stage
+    initialPipeline[0].completedAt = submissionDate;
+
     db.run(
       `
       INSERT INTO ideas (
@@ -158,6 +201,7 @@ const createIdea = (req, res) => {
         technicalFeasibility,
         status,
         statusHistory,
+        statusPipeline,
         impact,
         images,
         submittedByEmail,
@@ -170,7 +214,7 @@ const createIdea = (req, res) => {
         submittedBy,
         createdAt
       )
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `,
       [
         title,
@@ -181,6 +225,7 @@ const createIdea = (req, res) => {
         technicalFeasibility,
         'Submitted',
         JSON.stringify(initialHistory),
+        JSON.stringify(initialPipeline),
         JSON.stringify(parsedImpact),
         JSON.stringify(imagePaths),
         submittedByEmail,
@@ -193,6 +238,7 @@ const createIdea = (req, res) => {
         submitterId,
         submissionDate
       ],
+
       function (err) {
         if (err) {
           return res.status(500).json({ message: err.message });
@@ -209,6 +255,7 @@ const createIdea = (req, res) => {
           technicalFeasibility,
           status: 'Submitted',
           statusHistory: initialHistory,
+          statusPipeline: initialPipeline,
           impact: parsedImpact,
           images: imagePaths,
           submittedByEmail,
@@ -221,6 +268,7 @@ const createIdea = (req, res) => {
           submittedBy: submitterId,
           createdAt: submissionDate
         });
+
       }
     );
   } catch (error) {
@@ -230,7 +278,7 @@ const createIdea = (req, res) => {
 
 // @desc    Update idea details
 // PUT /api/ideas/:id
-const updateIdea = (req, res) => {
+const updateIdea = async (req, res) => {
   const { title, problemStatement, description, category, priority, technicalFeasibility, status, impact, deletedImages, businessImpact, expectedDeliveryDate, assignedReviewer, outcomesAndBenefits, hoursSaved, costSaved, createdAt } = req.body;
 
   // 1. Parse JSON fields
@@ -244,18 +292,24 @@ const updateIdea = (req, res) => {
     try { parsedDeleted = JSON.parse(deletedImages); } catch { parsedDeleted = []; }
   }
 
-  // 2. Fetch existing idea to handle images
-  db.get('SELECT * FROM ideas WHERE id = ?', [req.params.id], (err, row) => {
-    if (err) return res.status(500).json({ message: err.message });
-    if (!row) return res.status(404).json({ message: 'Idea not found' });
+  try {
+    await ideaMutex.runExclusive(req.params.id, async () => {
+      return new Promise((resolve) => {
+        // 2. Fetch existing idea to handle images
+        db.get('SELECT * FROM ideas WHERE id = ?', [req.params.id], (err, row) => {
+          if (err) { res.status(500).json({ message: err.message }); return resolve(); }
+          if (!row) { res.status(404).json({ message: 'Idea not found' }); return resolve(); }
 
     let existingImages = [];
     if (row.images) {
       try { existingImages = JSON.parse(row.images); } catch { existingImages = []; }
     }
 
-    // 3. Remove deleted images
+    // 3. Remove deleted images and purge them securely from physical disk
     let updatedImages = existingImages.filter(img => !parsedDeleted.includes(img));
+    if (parsedDeleted.length > 0) {
+      deleteFiles(parsedDeleted); // async background fire-and-forget
+    }
 
     // 4. Append newly uploaded images
     const newImagePaths = req.files ? req.files.map((file) => `/uploads/ideas/${file.filename}`) : [];
@@ -310,40 +364,47 @@ const updateIdea = (req, res) => {
           createdAt: newCreatedAt,
           statusHistory: row.statusHistory ? JSON.parse(row.statusHistory) : []
         });
+        resolve();
       }
     );
-  });
+        });
+      });
+    });
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
 };
 
 // @desc    Update idea status (admin only)
 // PATCH /api/ideas/:id/status
-const updateStatus = (req, res) => {
+const updateStatus = async (req, res) => {
   const { status, note, date } = req.body;
 
   const validStatuses = [
     'Submitted',
     'Approved',
     'In Progress',
+    'Testing/Validating',
     'Implemented',
     'Rejected'
   ];
+
 
   if (!status || !validStatuses.includes(status)) {
     return res.status(400).json({ message: 'Invalid status' });
   }
 
-  // Step 1: Fetch existing statusHistory
-  db.get(
-    'SELECT * FROM ideas WHERE id = ?',
-    [req.params.id],
-    (err, row) => {
-      if (err) {
-        return res.status(500).json({ message: err.message });
-      }
-
-      if (!row) {
-        return res.status(404).json({ message: 'Idea not found' });
-      }
+  // Secure database mutation via sequential in-memory Mutex Locking
+  try {
+    await ideaMutex.runExclusive(req.params.id, async () => {
+      return new Promise((resolve) => {
+        // Step 1: Fetch existing statusHistory safely within lock boundary
+        db.get(
+          'SELECT * FROM ideas WHERE id = ?',
+          [req.params.id],
+          (err, row) => {
+            if (err) { res.status(500).json({ message: err.message }); return resolve(); }
+            if (!row) { res.status(404).json({ message: 'Idea not found' }); return resolve(); }
 
       // Step 2: Parse existing history or start empty
       let history = [];
@@ -363,55 +424,71 @@ const updateStatus = (req, res) => {
         updatedBy: req.user.id
       });
 
-      // Step 4: Save back to SQLite
-      db.run(
-        `
-        UPDATE ideas
-        SET status = ?, statusHistory = ?
-        WHERE id = ?
-        `,
-        [
-          status,
-          JSON.stringify(history),
-          req.params.id
-        ],
-        function (err) {
-          if (err) {
-            return res.status(500).json({ message: err.message });
+          // Also update pipeline: mark matching stage as completed and update main status
+          let pipeline = parsePipeline(row.statusPipeline, row.status, row.createdAt);
+          const pipelineIdx = pipeline.findIndex(s => s.status === status);
+          if (pipelineIdx !== -1) {
+            pipeline[pipelineIdx].completed = true;
+            pipeline[pipelineIdx].completedAt = date || new Date().toISOString();
           }
 
-          res.json({
-            ...row,
-            _id: String(row.id),
-            status,
-            statusHistory: history,
-            images: row.images ? JSON.parse(row.images) : [],
-            impact: row.impact ? JSON.parse(row.impact) : {}
-          });
-        }
-      );
-    }
-  );
+          // Step 4: Save back to SQLite
+          db.run(
+            `UPDATE ideas SET status = ?, statusHistory = ?, statusPipeline = ? WHERE id = ?`,
+            [status, JSON.stringify(history), JSON.stringify(pipeline), req.params.id],
+            function (err) {
+              if (err) {
+                return res.status(500).json({ message: err.message });
+              }
+
+                res.json({
+                  ...row,
+                  _id: String(row.id),
+                  status,
+                  statusHistory: history,
+                  statusPipeline: pipeline,
+                  images: row.images ? JSON.parse(row.images) : [],
+                  impact: row.impact ? JSON.parse(row.impact) : {}
+                });
+                resolve();
+              }
+            );
+      });
+    });
+  });
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
 };
 
-// @desc    Delete an idea
+// @desc    Delete an idea and completely clean up physical ghosts
 // DELETE /api/ideas/:id
-const deleteIdea = (req, res) => {
-  db.run(
-    'DELETE FROM ideas WHERE id = ?',
-    [req.params.id],
-    function (err) {
-      if (err) {
-        return res.status(500).json({ message: err.message });
-      }
+const deleteIdea = async (req, res) => {
+  try {
+    await ideaMutex.runExclusive(req.params.id, async () => {
+      return new Promise((resolve) => {
+        db.get('SELECT images FROM ideas WHERE id = ?', [req.params.id], (err, row) => {
+          if (err) { res.status(500).json({ message: err.message }); return resolve(); }
+          if (!row) { res.status(404).json({ message: 'Idea not found' }); return resolve(); }
 
-      if (this.changes === 0) {
-        return res.status(404).json({ message: 'Idea not found' });
-      }
+          const images = row.images ? JSON.parse(row.images) : [];
 
-      res.json({ message: 'Idea deleted successfully' });
-    }
-  );
+          db.run('DELETE FROM ideas WHERE id = ?', [req.params.id], function (err) {
+            if (err) { res.status(500).json({ message: err.message }); return resolve(); }
+            if (this.changes === 0) { res.status(404).json({ message: 'Idea not found' }); return resolve(); }
+            
+            // Clean physical directory payload asynchronously
+            deleteFiles(images);
+            
+            res.json({ message: 'Idea deleted successfully' });
+            resolve();
+          });
+        });
+      });
+    });
+  } catch (error) {
+     res.status(500).json({ message: error.message });
+  }
 };
 
 // @desc    Get summary stats
@@ -464,12 +541,75 @@ const getStats = (req, res) => {
   });
 };
 
+// @desc    Update pipeline stage (tick/untick + deadline)
+// PATCH /api/ideas/:id/pipeline  (admin only)
+const updatePipeline = async (req, res) => {
+  const { stageIndex, completed, deadline } = req.body;
+
+  if (stageIndex === undefined || stageIndex < 0 || stageIndex >= PIPELINE_STAGES.length) {
+    return res.status(400).json({ message: 'Invalid stageIndex' });
+  }
+
+  try {
+    await ideaMutex.runExclusive(req.params.id, async () => {
+      return new Promise((resolve) => {
+        db.get('SELECT * FROM ideas WHERE id = ?', [req.params.id], (err, row) => {
+          if (err) { res.status(500).json({ message: err.message }); return resolve(); }
+          if (!row) { res.status(404).json({ message: 'Idea not found' }); return resolve(); }
+
+    const pipeline = parsePipeline(row.statusPipeline, row.status, row.createdAt);
+
+    // Toggle completed
+    if (completed !== undefined) {
+      pipeline[stageIndex].completed = Boolean(completed);
+      pipeline[stageIndex].completedAt = completed ? new Date().toISOString() : null;
+    }
+
+    // Update deadline (admin-only field, ISO string or null)
+    if (deadline !== undefined) {
+      pipeline[stageIndex].deadline = deadline || null;
+    }
+
+    // Derive overall idea status from last completed pipeline stage
+    let newMainStatus = row.status;
+    const lastCompletedIdx = pipeline.reduce((acc, s, i) => s.completed ? i : acc, -1);
+    if (lastCompletedIdx >= 0) {
+      newMainStatus = pipeline[lastCompletedIdx].status;
+    }
+
+    db.run(
+      `UPDATE ideas SET status = ?, statusPipeline = ? WHERE id = ?`,
+      [newMainStatus, JSON.stringify(pipeline), req.params.id],
+      function (err) {
+        if (err) return res.status(500).json({ message: err.message });
+        res.json({
+          ...row,
+          _id: String(row.id),
+          status: newMainStatus,
+          statusPipeline: pipeline,
+          statusHistory: row.statusHistory ? JSON.parse(row.statusHistory) : [],
+          images: row.images ? JSON.parse(row.images) : [],
+          impact: row.impact ? JSON.parse(row.impact) : {}
+        });
+        resolve();
+      }
+    );
+        });
+      });
+    });
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
+
 module.exports = {
   getIdeas,
   getIdea,
   createIdea,
   updateIdea,
   updateStatus,
+  updatePipeline,
   deleteIdea,
   getStats
 };
+

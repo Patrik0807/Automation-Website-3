@@ -14,7 +14,10 @@ import {
   LayoutDashboard,
   ArrowRight,
   Atom,
+  ClipboardList,
+  Users,
 } from 'lucide-react';
+
 
 /* ─── Toyota Logo SVG (inline, no external dep) ─────────────── */
 // function ToyotaLogo({ className = 'w-8 h-8' }) {
@@ -41,8 +44,9 @@ const NAV_LINKS = [
   { to: '/ideas-table', label: 'Table View', icon: LayoutDashboard },
   { to: '/insights', label: 'Insights', icon: BarChart },
   { to: '/voice-ideas', label: 'VOICE Ideas', icon: Atom },
-  { to: '/team-structure', label: 'Core team', icon: Atom },
+  { to: '/team-structure', label: 'Core team', icon: Users },
 ];
+
 
 export default function Navbar() {
   const { user, logout } = useAuth();
@@ -136,6 +140,18 @@ export default function Navbar() {
                           </p>
                         </div>
                         <div className="p-2">
+                          {/* Admin-only: Action Points */}
+                          {user.role === 'admin' && (
+                            <Link
+                              to="/action-points"
+                              onClick={() => setShowProfile(false)}
+                              className="w-full flex items-center gap-3 px-3 py-2.5 text-sm text-slate-700
+                                         hover:bg-primary-50 hover:text-primary-700 rounded-xl transition-colors"
+                            >
+                              <ClipboardList className="w-4 h-4 text-primary-500" />
+                              Action Points
+                            </Link>
+                          )}
                           <button
                             onClick={handleLogout}
                             className="w-full flex items-center gap-3 px-3 py-2.5 text-sm text-red-600
@@ -145,6 +161,7 @@ export default function Navbar() {
                             Sign Out
                           </button>
                         </div>
+
                       </motion.div>
                     )}
                   </AnimatePresence>
