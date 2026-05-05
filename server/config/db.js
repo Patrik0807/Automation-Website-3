@@ -10,6 +10,9 @@ const db = new sqlite3.Database(dbPath, (err) => {
     console.error('❌ Failed to connect to SQLite:', err.message);
   } else {
     console.log('✅ SQLite database connected');
+    // Enable WAL for better concurrency 
+    db.run('PRAGMA journal_mode = WAL;');
+    db.run('PRAGMA busy_timeout = 5000;');
   }
 });
 

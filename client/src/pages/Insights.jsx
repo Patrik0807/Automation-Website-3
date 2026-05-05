@@ -59,7 +59,13 @@ export default function Insights() {
     };
   });
 
-  const chartWidth = Math.max(100, projectImpactData.length * 70);
+  // Ensure uniform scaling geometry across all charts
+  const BAR_SIZE = 48;
+  const COLUMN_WIDTH = 80; 
+  
+  const categoryChartWidth = Math.max(100, categoryData.length * COLUMN_WIDTH);
+  const impactChartWidth = Math.max(100, projectImpactData.length * COLUMN_WIDTH);
+  
 
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-10 pb-20">
@@ -142,8 +148,10 @@ export default function Insights() {
               <BarChart3 className="w-5 h-5 text-primary-500" />
               Category Overview
             </h3>
-            <div className="h-[350px] w-full">
-              <ResponsiveContainer width="100%" height="100%">
+            <div className="h-[350px] w-full overflow-x-auto overflow-y-hidden">
+               <div style={{ width: `${categoryChartWidth}px`, minWidth: '100%', height: '100%' }}>
+                 <ResponsiveContainer width="100%" height="100%">
+
                 {/* <BarChart data={categoryData}>
                   <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f0f0f0" />
                   <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fill: '#64748b', fontSize: 12 }} />
@@ -174,14 +182,16 @@ export default function Insights() {
                       boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)',
                     }}
                   />
-                  <Bar dataKey="count" radius={[6, 6, 0, 0]} barSize={50}>
+                  <Bar dataKey="count" radius={[6, 6, 0, 0]} barSize={BAR_SIZE}>
                     {categoryData.map((entry, index) => (
                       <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
                     ))}
                   </Bar>
                 </BarChart>
               </ResponsiveContainer>
+              </div>
             </div>
+
           </motion.div>
         </div>
 
@@ -249,8 +259,9 @@ export default function Insights() {
                     </div>
                   ) : (
                     <div className="flex-1 overflow-x-auto overflow-y-hidden" style={{ minHeight: '300px' }}>
-                      <div style={{ width: `${chartWidth}px`, minWidth: '100%', height: '100%' }}>
+                      <div style={{ width: `${impactChartWidth}px`, minWidth: '100%', height: '100%' }}>
                         <ResponsiveContainer width="100%" height="100%">
+
                           <BarChart
                             data={projectImpactData}
                             margin={{ top: 10, right: 10, left: -20, bottom: 40 }}
@@ -275,7 +286,8 @@ export default function Insights() {
                               formatter={(value) => [value, 'Hours Saved']}
                               labelFormatter={(label, payload) => payload?.[0]?.payload?.title || label}
                             />
-                            <Bar dataKey="hoursSaved" fill="#EB0A1E" radius={[6, 6, 0, 0]} barSize={50} />
+                            <Bar dataKey="hoursSaved" fill="#EB0A1E" radius={[6, 6, 0, 0]} barSize={BAR_SIZE} />
+
                           </BarChart>
                         </ResponsiveContainer>
                       </div>
@@ -295,8 +307,9 @@ export default function Insights() {
                     </div>
                   ) : (
                     <div className="flex-1 overflow-x-auto overflow-y-hidden" style={{ minHeight: '300px' }}>
-                      <div style={{ width: `${chartWidth}px`, minWidth: '100%', height: '100%' }}>
+                      <div style={{ width: `${impactChartWidth}px`, minWidth: '100%', height: '100%' }}>
                         <ResponsiveContainer width="100%" height="100%">
+
                           <BarChart
                             data={projectImpactData}
                             margin={{ top: 10, right: 10, left: 0, bottom: 40 }}
@@ -321,7 +334,8 @@ export default function Insights() {
                               formatter={(value) => [`€${value}`, 'Cost Saved']}
                               labelFormatter={(label, payload) => payload?.[0]?.payload?.title || label}
                             />
-                            <Bar dataKey="costSaved" fill="#10B981" radius={[6, 6, 0, 0]} barSize={50} />
+                            <Bar dataKey="costSaved" fill="#10B981" radius={[6, 6, 0, 0]} barSize={BAR_SIZE} />
+
                           </BarChart>
                         </ResponsiveContainer>
                       </div>

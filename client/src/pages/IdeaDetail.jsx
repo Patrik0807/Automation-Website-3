@@ -1,41 +1,34 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useAuth } from '../context/AuthContext';
 import API from '../api/ideas';
-import Timeline from '../components/Timeline';
 import StatusBadge from '../components/StatusBadge';
 import toast from 'react-hot-toast';
-//import { FileText } from "lucide-react";
 import {
-  ArrowLeft,
-  AlertTriangle,
-  Image,
-  ShieldAlert,
-  Tag,
-  CalendarDays,
-  Trash2,
-  TrendingUp,
-  ChevronDown,
-  Send,
-  User,
-  Edit,
-  Wrench,
-  FileText,
-  Clock,
-  Target,
-  File as FileIcon
+  ArrowLeft, AlertTriangle, Image, ShieldAlert, Tag, CalendarDays,
+  Trash2, TrendingUp, Send, User, Edit, Wrench, FileText, Clock,
+  Target, File as FileIcon, CheckCircle2, Circle, FlaskConical,
+  CalendarClock, Pencil, Check, X as XIcon, Loader2, ChevronDown
 } from 'lucide-react';
 import IdeaForm, { isImage } from '../components/IdeaForm';
 
-/** Valid idea statuses */
+
+/** Valid idea statuses (includes new Testing/Validating stage) */
 const allStatuses = [
-  'Submitted',
-  'Approved',
-  'In Progress',
-  'Implemented',
-  'Rejected',
+  'Submitted', 'Approved', 'In Progress', 'Testing/Validating', 'Implemented', 'Rejected',
 ];
+
+/** Pipeline stage icons */
+const STAGE_ICONS = {
+  'Submitted':          FileText,
+  'Approved':           CheckCircle2,
+  'In Progress':        Clock,
+  'Testing/Validating': FlaskConical,
+  'Implemented':        TrendingUp,
+  'Rejected':           XIcon,
+};
+
 
 export default function IdeaDetail() {
   const { id } = useParams();
@@ -43,15 +36,15 @@ export default function IdeaDetail() {
   const { user } = useAuth();
   const [idea, setIdea] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [showStatusUpdate, setShowStatusUpdate] = useState(false);
-  const [newStatus, setNewStatus] = useState('');
-  const [statusDate, setStatusDate] = useState(new Date().toISOString().slice(0,16));
-  const [statusNote, setStatusNote] = useState('');
-  const [updating, setUpdating] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [showEditForm, setShowEditForm] = useState(false);
   const [selectedImage, setSelectedImage] = useState(null);
+  // Pipeline state
+  const [pipeline, setPipeline] = useState([]);
+  const [pipelineLoading, setPipelineLoading] = useState(null); // stageIndex being saved
+  const [deadlineEdit, setDeadlineEdit] = useState(null);  // { index, value }
+
 
 
   useEffect(() => {
@@ -63,6 +56,7 @@ export default function IdeaDetail() {
     try {
       const { data } = await API.getIdea(id);
       setIdea(data);
+      setPipeline(Array.isArray(data.statusPipeline) ? data.statusPipeline : []);
     } catch (error) {
       toast.error('Failed to load idea');
       navigate('/');
@@ -71,30 +65,49 @@ export default function IdeaDetail() {
     }
   };
 
-  const handleStatusUpdate = async () => {
-    if (!newStatus) {
-      toast.error('Please select a status');
-      return;
-    }
-    setUpdating(true);
+  /** Admin: toggle a pipeline stage completed / uncompleted */
+  const handlePipelineTick = useCallback(async (stageIndex) => {
+    const stage = pipeline[stageIndex];
+    if (!stage) return;
+    const newCompleted = !stage.completed;
+
+    // Optimistic update
+    const prev = [...pipeline];
+    const updated = pipeline.map((s, i) =>
+      i === stageIndex ? { ...s, completed: newCompleted, completedAt: newCompleted ? new Date().toISOString() : null } : s
+    );
+    setPipeline(updated);
+    setPipelineLoading(stageIndex);
+
     try {
-      const { data } = await API.updateStatus(id, {
-        status: newStatus,
-        note: statusNote,
-        date: new Date(statusDate).toISOString()
-      });
-      setIdea(data);
-      setShowStatusUpdate(false);
-      setNewStatus('');
-      setStatusNote('');
-      setStatusDate(new Date().toISOString().slice(0,16));
-      toast.success(`Status updated to "${newStatus}"`);
-    } catch (error) {
-      toast.error(error.response?.data?.message || 'Failed to update status');
+      const { data } = await API.updatePipeline(id, { stageIndex, completed: newCompleted });
+      setPipeline(data.statusPipeline);
+      setIdea(prev2 => ({ ...prev2, status: data.status, statusPipeline: data.statusPipeline }));
+      toast.success(newCompleted ? `✅ ${stage.status} completed` : `↩ ${stage.status} unchecked`);
+    } catch (err) {
+      setPipeline(prev); // rollback
+      toast.error(err.response?.data?.message || 'Failed to update pipeline');
     } finally {
-      setUpdating(false);
+      setPipelineLoading(null);
     }
-  };
+  }, [id, pipeline]);
+
+  /** Admin: save a deadline for a pipeline stage */
+  const handleDeadlineSave = useCallback(async (stageIndex, deadline) => {
+    setPipelineLoading(stageIndex);
+    try {
+      const { data } = await API.updatePipeline(id, { stageIndex, deadline: deadline || null });
+      setPipeline(data.statusPipeline);
+      setDeadlineEdit(null);
+      toast.success('Deadline updated');
+    } catch (err) {
+      toast.error(err.response?.data?.message || 'Failed to save deadline');
+    } finally {
+      setPipelineLoading(null);
+    }
+  }, [id]);
+
+
 
   const handleDelete = async () => {
     setDeleting(true);
@@ -111,16 +124,21 @@ export default function IdeaDetail() {
 
 
   const getProgress = () => {
-  const progressMap = {
-    "Rejected": 0,
-    "Submitted": 25,
-    "Approved": 50,
-    "In Progress": 75,
-    "Implemented": 100,
+    // If the pipeline determines a rejection, forcefully drop scaling to exactly 0 to represent termination
+    if (idea?.status === 'Rejected' || pipeline.some(s => s.status === 'Rejected' && s.completed)) {
+      return 0;
+    }
+
+    // Measure active completed phases excluding Rejected completely 
+    const activeTimeline = pipeline.filter(s => s.status !== 'Rejected');
+    if (activeTimeline.length > 0) {
+      const completedCount = activeTimeline.filter(s => s.completed).length;
+      return Math.round((completedCount / activeTimeline.length) * 100);
+    }
+    
+    return 0;
   };
 
-  return progressMap[idea?.status] || 0;
-};
 
   if (loading) {
     return (
@@ -209,7 +227,7 @@ export default function IdeaDetail() {
                 </div>
               </div>
 
-              {/* Action Buttons */}
+              {/* Action Buttons — admin only */}
               <div className="flex gap-2">
                 {isAdmin && (
                   <>
@@ -231,20 +249,8 @@ export default function IdeaDetail() {
                     </button>
                   </>
                 )}
-                {isAdmin && (
-                  <button
-                    onClick={() => setShowStatusUpdate(!showStatusUpdate)}
-                    className="flex items-center gap-2 bg-primary-500 hover:bg-primary-600 text-white font-bold
-                               px-5 py-2.5 rounded-xl shadow-lg shadow-primary-500/20 transition-all text-sm active:scale-95"
-                  >
-                    <TrendingUp className="w-4 h-4" />
-                    Update Status
-                    <ChevronDown
-                      className={`w-4 h-4 transition-transform ${showStatusUpdate ? 'rotate-180' : ''}`}
-                    />
-                  </button>
-                )}
               </div>
+
             </div>
           </motion.div>
 
@@ -271,85 +277,8 @@ export default function IdeaDetail() {
       </div>
 
       <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 -mt-4 relative z-10">
-        {/* Status Update Panel */}
-        <AnimatePresence>
-          {showStatusUpdate && (
-            <motion.div
-              initial={{ opacity: 0, height: 0 }}
-              animate={{ opacity: 1, height: 'auto' }}
-              exit={{ opacity: 0, height: 0 }}
-              className="overflow-hidden mb-6"
-            >
-              <div className="bg-white rounded-2xl shadow-lg border border-gray-100 p-6">
-                <h3 className="font-bold text-slate-800 mb-4 flex items-center gap-2">
-                  <TrendingUp className="w-5 h-5 text-primary-500" />
-                  Update Idea Status
-                </h3>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4">
-                  <div>
-                    <label className="block text-sm font-semibold text-slate-700 mb-2">
-                      New Status
-                    </label>
-                    <select
-                      value={newStatus}
-                      onChange={(e) => setNewStatus(e.target.value)}
-                      className="select-field"
-                    >
-                      <option value="">Select status</option>
-                      {allStatuses.map((s) => (
-                        <option key={s} value={s}>
-                          {s}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                  <div>
-                    <label className="block text-sm font-semibold text-slate-700 mb-2">
-                      Effective Date
-                    </label>
-                    <input
-                      type="datetime-local"
-                      value={statusDate}
-                      onChange={(e) => setStatusDate(e.target.value)}
-                      className="input-field"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-semibold text-slate-700 mb-2">
-                      Note (optional)
-                    </label>
-                    <input
-                      value={statusNote}
-                      onChange={(e) => setStatusNote(e.target.value)}
-                      placeholder="Add a note about this update"
-                      className="input-field"
-                    />
-                  </div>
-                </div>
-                <div className="flex gap-3">
-                  <button
-                    onClick={() => setShowStatusUpdate(false)}
-                    className="btn-secondary"
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    onClick={handleStatusUpdate}
-                    disabled={updating}
-                    className="btn-primary flex items-center gap-2"
-                  >
-                    {updating ? (
-                      <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                    ) : (
-                      <Send className="w-4 h-4" />
-                    )}
-                    Update Status
-                  </button>
-                </div>
-              </div>
-            </motion.div>
-          )}
-        </AnimatePresence>
+        {/* ── Pipeline replaces the old status update panel ── */}
+
 
         {/* Content Grid */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -539,47 +468,192 @@ export default function IdeaDetail() {
             )}
           </div>
 
-          {/* Right Column — Timeline */}
-          <div className="space-y-6 lg:sticky lg:top-28 lg:self-start lg:max-h">
+          {/* Right Column — Pipeline + Illustration */}
+          <div className="space-y-6 lg:sticky lg:top-28 lg:self-start">
+
+            {/* ── Status Pipeline Card ─────────────────────────── */}
             <motion.div
               initial={{ opacity: 0, y: 10 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: 0.15 }}
               className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6"
             >
-              <h2 className="text-lg font-bold text-slate-800 mb-6 flex items-center gap-2">
-                <Clock className="w-5 h-5 text-primary-500" />
-                Status Timeline
+              <h2 className="text-lg font-bold text-slate-800 mb-5 flex items-center gap-2">
+                <CalendarClock className="w-5 h-5 text-primary-500" />
+                Project Pipeline
               </h2>
-              <Timeline statusHistory={idea.statusHistory} />
+
+              {/* Pipeline stages */}
+              <div className="space-y-0">
+                {pipeline.map((stage, idx) => {
+                  const StageIcon = STAGE_ICONS[stage.status] || CheckCircle2;
+                  const isCompleted = stage.completed;
+                  const isActive = !isCompleted && pipeline.slice(0, idx).every(s => s.completed);
+                  const isEditingDeadline = deadlineEdit?.index === idx;
+                  const isLast = idx === pipeline.length - 1;
+                  const savingThis = pipelineLoading === idx;
+
+                  return (
+                    <div key={stage.status} className="relative">
+                      {/* Vertical connector line */}
+                      {!isLast && (
+                        <div className={`absolute left-[19px] top-10 w-0.5 h-[calc(100%-8px)] ${
+                          isCompleted ? 'bg-primary-300' : 'bg-gray-200'
+                        }`} />
+                      )}
+
+                      <div className="flex gap-3 pb-4">
+                        {/* Stage icon — clickable for admin */}
+                        <button
+                          onClick={() => isAdmin && handlePipelineTick(idx)}
+                          disabled={!isAdmin || savingThis}
+                          title={isAdmin ? (isCompleted ? 'Click to unmark' : 'Click to mark complete') : ''}
+                          className={`relative z-10 flex-shrink-0 w-10 h-10 rounded-full flex items-center
+                            justify-center border-2 transition-all duration-200
+                            ${ isCompleted
+                                ? 'bg-primary-500 border-primary-500 text-white shadow-md shadow-primary-500/30'
+                                : isActive
+                                ? 'bg-amber-50 border-amber-400 text-amber-600 animate-pulse'
+                                : 'bg-gray-50 border-gray-200 text-gray-400'
+                            } ${ isAdmin ? 'cursor-pointer hover:scale-110 active:scale-95' : 'cursor-default'
+                            }`}
+                        >
+                          {savingThis ? (
+                            <Loader2 className="w-4 h-4 animate-spin" />
+                          ) : isCompleted ? (
+                            <Check className="w-4 h-4" />
+                          ) : (
+                            <StageIcon className="w-4 h-4" />
+                          )}
+                        </button>
+
+                        {/* Stage content */}
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2 mb-0.5">
+                            <span className={`font-bold text-sm ${
+                              isCompleted ? 'text-slate-800' : isActive ? 'text-amber-700' : 'text-slate-400'
+                            }`}>
+                              {stage.status}
+                            </span>
+                            {isActive && (
+                              <span className="text-[10px] font-black uppercase tracking-wider
+                                               bg-amber-50 text-amber-600 border border-amber-200
+                                               px-1.5 py-0.5 rounded-full">
+                                Active
+                              </span>
+                            )}
+                          </div>
+
+                          {/* Completion date */}
+                          {isCompleted && stage.completedAt && (
+                            <p className="text-[11px] text-slate-400 font-medium">
+                              Done {new Date(stage.completedAt).toLocaleDateString('en-IN', {
+                                day: 'numeric', month: 'short', year: 'numeric'
+                              })}
+                            </p>
+                          )}
+
+                          {/* Deadline — admin only */}
+                          {isAdmin && (
+                            <div className="mt-1">
+                              {isEditingDeadline ? (
+                                <div className="flex items-center gap-1.5 mt-1">
+                                  <input
+                                    type="date"
+                                    value={deadlineEdit.value}
+                                    onChange={e => setDeadlineEdit({ index: idx, value: e.target.value })}
+                                    className="text-xs border border-gray-200 rounded-lg px-2 py-1
+                                               focus:outline-none focus:border-primary-400 font-medium"
+                                    autoFocus
+                                  />
+                                  <button
+                                    onClick={() => handleDeadlineSave(idx, deadlineEdit.value)}
+                                    disabled={savingThis}
+                                    className="w-6 h-6 bg-primary-500 text-white rounded-lg flex items-center
+                                               justify-center hover:bg-primary-600 transition-colors"
+                                  >
+                                    {savingThis ? <Loader2 className="w-3 h-3 animate-spin" /> : <Check className="w-3 h-3" />}
+                                  </button>
+                                  <button
+                                    onClick={() => setDeadlineEdit(null)}
+                                    className="w-6 h-6 bg-gray-100 text-gray-500 rounded-lg flex items-center
+                                               justify-center hover:bg-gray-200 transition-colors"
+                                  >
+                                    <XIcon className="w-3 h-3" />
+                                  </button>
+                                </div>
+                              ) : (
+                                <button
+                                  onClick={() => setDeadlineEdit({
+                                    index: idx,
+                                    value: stage.deadline
+                                      ? stage.deadline.slice(0, 10)
+                                      : ''
+                                  })}
+                                  className="flex items-center gap-1 text-[11px] mt-0.5
+                                             text-slate-400 hover:text-primary-600 transition-colors group"
+                                  title="Set deadline"
+                                >
+                                  <Pencil className="w-2.5 h-2.5 opacity-0 group-hover:opacity-100" />
+                                  {stage.deadline ? (
+                                    <span className="font-semibold text-amber-700">
+                                      Deadline: {new Date(stage.deadline).toLocaleDateString('en-IN', {
+                                        day: 'numeric', month: 'short', year: 'numeric'
+                                      })}
+                                    </span>
+                                  ) : (
+                                    <span className="italic">Set deadline…</span>
+                                  )}
+                                </button>
+                              )}
+                            </div>
+                          )}
+
+                          {/* Users see deadline (but can't edit) */}
+                          {!isAdmin && stage.deadline && (
+                            <p className="text-[11px] text-amber-700 font-semibold mt-0.5">
+                              Due {new Date(stage.deadline).toLocaleDateString('en-IN', {
+                                day: 'numeric', month: 'short', year: 'numeric'
+                              })}
+                            </p>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+
+                {pipeline.length === 0 && (
+                  <p className="text-slate-400 text-sm font-medium italic py-4 text-center">
+                    Pipeline loading…
+                  </p>
+                )}
+              </div>
             </motion.div>
 
-            {/* Side Illustration - Dynamic or Generic */}
+            {/* Side Illustration */}
             <motion.div
               initial={{ opacity: 0, scale: 0.95 }}
               animate={{ opacity: 1, scale: 1 }}
               transition={{ delay: 0.3 }}
               className="relative rounded-2xl overflow-hidden aspect-[4/5] shadow-xl border-4 border-white"
             >
-              <img 
-                src={(Array.isArray(idea.images) && idea.images.find(img => isImage(img))) || "/automation_illustration.png"} 
-                alt="Idea Visual" 
+              <img
+                src={(Array.isArray(idea.images) && idea.images.find(img => isImage(img))) || "/automation_illustration.png"}
+                alt="Idea Visual"
                 className="w-full h-full object-cover"
-                onError={(e) => {
-                  e.target.onerror = null;
-                  e.target.src = "/automation_illustration.png";
-                }}
+                onError={(e) => { e.target.onerror = null; e.target.src = "/automation_illustration.png"; }}
               />
               <div className="absolute inset-0 bg-transparent from-slate-900/60 via-transparent to-transparent flex flex-col justify-end p-6">
                 <p className="text-white font-bold text-lg leading-tight">
-                  {Array.isArray(idea.images) && idea.images.some(img => isImage(img)) 
+                  {Array.isArray(idea.images) && idea.images.some(img => isImage(img))
                     ? ""
-                    : "Driving efficiency through digital transformation."
-                  }
+                    : "Driving efficiency through digital transformation."}
                 </p>
               </div>
             </motion.div>
           </div>
+
         </div>
       </div>
 

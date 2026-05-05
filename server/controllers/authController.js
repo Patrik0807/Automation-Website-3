@@ -8,54 +8,7 @@ const generateToken = (id) => {
   });
 };
 
-// REGISTER
-const register = (req, res) => {
-  const { name, email, password, department, role } = req.body;
 
-  if (!name || !email || !password) {
-    return res.status(400).json({ message: 'Missing required fields' });
-  }
-
-  db.get(
-    'SELECT id FROM users WHERE email = ?',
-    [email],
-    async (err, user) => {
-      if (user) {
-        return res.status(400).json({ message: 'User already exists' });
-      }
-
-      const hashedPassword = await bcrypt.hash(password, 10);
-
-      db.run(
-        `
-        INSERT INTO users (name, email, password, role, department, createdAt)
-        VALUES (?, ?, ?, ?, ?, ?)
-        `,
-        [
-          name,
-          email,
-          hashedPassword,
-          role || 'user',
-          department || null,
-          new Date().toISOString()
-        ],
-        function (err) {
-          if (err) return res.status(500).json({ message: err.message });
-
-          res.status(201).json({
-            id: this.lastID,
-            _id: String(this.lastID),
-            name,
-            email,
-            role: role || 'user',
-            department,
-            token: generateToken(this.lastID)
-          });
-        }
-      );
-    }
-  );
-};
 
 // LOGIN
 const login = (req, res) => {
@@ -92,4 +45,4 @@ const getMe = (req, res) => {
   res.json(req.user);
 };
 
-module.exports = { register, login, getMe };
+module.exports = { login, getMe };

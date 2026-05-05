@@ -7,11 +7,12 @@ const {
   createIdea,
   updateIdea,
   updateStatus,
+  updatePipeline,
   deleteIdea,
   getStats
 } = require('../controllers/ideaController');
 const { protect, adminOnly, optionalProtect } = require('../middleware/auth');
-const upload = require('../middleware/upload');
+const { upload } = require('../middleware/upload');
 
 // Stats and List — public
 router.get('/stats/summary', optionalProtect, getStats);
@@ -30,4 +31,8 @@ router
 // Admin-only status update
 router.patch('/:id/status', protect, adminOnly, updateStatus);
 
+// Admin-only pipeline update (tick/deadline)
+router.patch('/:id/pipeline', protect, adminOnly, updatePipeline);
+
 module.exports = router;
+

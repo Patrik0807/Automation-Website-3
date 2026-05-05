@@ -23,8 +23,10 @@ const API = {
     });
   },
   updateStatus: (id, data) => axios.patch(`/api/ideas/${id}/status`, data),
+  updatePipeline: (id, data) => axios.patch(`/api/ideas/${id}/pipeline`, data),
   deleteIdea: (id) => axios.delete(`/api/ideas/${id}`),
   getStats: () => axios.get('/api/ideas/stats/summary')
 };
+
 
 export default API;
