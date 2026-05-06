@@ -26,9 +26,9 @@ function Avatar({ name = '', imageUrl = '', type = 'member', size = 'md' }) {
   };
 
   const gradients = {
-    director:    'from-amber-400 to-amber-600',
-    team_leader: 'from-primary-500 to-primary-700',
-    member:      'from-slate-500 to-slate-700',
+    Director:       'from-amber-400 to-amber-600',
+    'Group Leader': 'from-primary-500 to-primary-700',
+    member:         'from-rose-500 to-rose-700',
   };
 
   const initials = name
@@ -65,11 +65,13 @@ function Avatar({ name = '', imageUrl = '', type = 'member', size = 'md' }) {
 ═══════════════════════════════════════════════════════════════ */
 function TypeBadge({ type }) {
   const map = {
-    director:    { label: 'Director',     cls: 'bg-amber-50 text-amber-700 border-amber-200',    icon: Crown },
-    team_leader: { label: 'Team Leader',  cls: 'bg-primary-50 text-primary-700 border-primary-200', icon: UserCheck },
-    member:      { label: 'Team Member',  cls: 'bg-slate-50 text-slate-600 border-slate-200',    icon: Users },
+    Director:             { label: 'Director',           cls: 'bg-amber-50 text-amber-700 border-amber-200',    icon: Crown },
+    'Group Leader':       { label: 'Group Leader',       cls: 'bg-primary-50 text-primary-700 border-primary-200', icon: UserCheck },
+    member:               { label: 'Team Member',        cls: 'bg-rose-50 text-rose-700 border-rose-200',   icon: Users },
   };
-  const { label, cls, icon: Icon } = map[type] || map.member;
+  const typeKey = (type === 'executive_director' || type === 'director' || type === 'Executive Director') ? 'Director' : 
+                  (type === 'group_leader' || type === 'team_leader') ? 'Group Leader' : type;
+  const { label, cls, icon: Icon } = map[typeKey] || map.member;
   return (
     <span className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-bold border ${cls}`}>
       <Icon className="w-3 h-3" />
@@ -122,17 +124,28 @@ function MemberModal({ member, onClose, isAdmin, onDeleteRequest }) {
           {/* Header band */}
           <div
             className={`px-8 pt-8 pb-6 flex flex-col items-center text-center
-              ${member.type === 'director'
+              ${(member.type === 'Director' || member.type === 'Executive Director')
                 ? 'bg-gradient-to-br from-amber-50 to-amber-100'
-                : member.type === 'team_leader'
+                : member.type === 'group_leader' || member.type === 'Group Leader'
                 ? 'bg-gradient-to-br from-primary-50 to-primary-100'
-                : 'bg-gradient-to-br from-slate-50 to-slate-100'
+                : 'bg-gradient-to-br from-indigo-50 to-indigo-100'
               }`}
           >
-            <Avatar name={member.name} imageUrl={member.imageUrl} type={member.type} size="xl" />
-            <h2 className="mt-4 text-2xl font-black text-slate-900">{member.name}</h2>
-            <p className="text-slate-600 font-semibold mt-1">{member.role}</p>
-            <div className="mt-3">
+            <div
+              className={`w-24 h-24 rounded-3xl mb-4 border-4 border-white shadow-xl flex items-center justify-center text-3xl font-black
+                ${(member.type === 'Director' || member.type === 'Executive Director')
+                  ? 'bg-amber-500 text-white'
+                  : member.type === 'group_leader' || member.type === 'Group Leader'
+                  ? 'bg-primary-600 text-white'
+                  : 'bg-indigo-600 text-white'
+                }`}
+            >
+              {member.name.charAt(0)}
+            </div>
+            <h3 className="text-xl font-black text-slate-900 leading-tight">
+              {member.name}
+            </h3>
+            <div className="mt-2">
               <TypeBadge type={member.type} />
             </div>
           </div>
@@ -284,9 +297,9 @@ function AddMemberModal({ onClose, onSaved }) {
 
 
   const typeOptions = [
-    { value: 'director',    label: 'Director',    icon: '👑' },
-    { value: 'team_leader', label: 'Team Leader',  icon: '🛡️' },
-    { value: 'member',      label: 'Team Member',  icon: '👤' },
+    { value: 'Director', label: 'Director', icon: '👑' },
+    { value: 'Group Leader',      label: 'Group Leader',       icon: '🛡️' },
+    { value: 'member',            label: 'Team Member',        icon: '👤' },
   ];
 
   return (
@@ -492,27 +505,17 @@ function AddMemberModal({ onClose, onSaved }) {
 ═══════════════════════════════════════════════════════════════ */
 function OrgConnector() {
   return (
-    <div className="relative flex justify-center" style={{ height: 56 }}>
-      {/* Left stem — from center of left leadership card */}
+    <div className="relative w-full" style={{ height: 48 }}>
+      {/* Horizontal bar joining ED and GL */}
       <div
-        className="absolute bg-gray-300"
-        style={{ left: 'calc(50% - 100px)', top: 0, width: 2, height: 28 }}
+        className="absolute bg-gray-300 left-1/4 right-1/4 top-0 h-0.5"
       />
-      {/* Right stem — from center of right leadership card */}
-      <div
-        className="absolute bg-gray-300"
-        style={{ right: 'calc(50% - 100px)', top: 0, width: 2, height: 28 }}
-      />
-      {/* Horizontal bar joining both stems */}
-      <div
-        className="absolute bg-gray-300"
-        style={{ left: 'calc(50% - 100px)', right: 'calc(50% - 100px)', top: 28, height: 2 }}
-      />
-      {/* Center vertical stem going down */}
-      <div
-        className="absolute bg-gray-300"
-        style={{ left: '50%', transform: 'translateX(-50%)', top: 28, width: 2, height: 28 }}
-      />
+      {/* Connector stems from each leader down to the horizontal bar */}
+      <div className="absolute bg-gray-300 left-1/4 top-0 w-0.5 h-6" />
+      <div className="absolute bg-gray-300 right-1/4 top-0 w-0.5 h-6" />
+      
+      {/* Center stem down to the team members */}
+      <div className="absolute bg-gray-300 left-1/2 top-0 w-0.5 h-12 -translate-x-1/2" />
     </div>
   );
 }
@@ -521,7 +524,7 @@ function OrgConnector() {
    Leadership Card (Director / Team Leader)
 ═══════════════════════════════════════════════════════════════ */
 function LeaderCard({ member, onClick }) {
-  const isDirector = member.type === 'director';
+  const isExecDirector = member.type === 'Executive Director';
   return (
     <motion.div
       whileHover={{ y: -4, scale: 1.02 }}
@@ -529,23 +532,23 @@ function LeaderCard({ member, onClick }) {
       onClick={() => onClick(member)}
       className={`group relative cursor-pointer rounded-3xl border-2 p-6 shadow-sm
                   hover:shadow-xl transition-all duration-300 bg-white overflow-hidden
-                  ${isDirector
+                  ${(member.type === 'Director' || member.type === 'Executive Director')
                     ? 'border-amber-200 hover:border-amber-400'
                     : 'border-primary-200 hover:border-primary-400'}`}
     >
       {/* Accent glow */}
       <div
         className={`absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity
-          ${isDirector
+          ${(member.type === 'Director' || member.type === 'Executive Director')
             ? 'bg-gradient-to-br from-amber-50/60 to-transparent'
             : 'bg-gradient-to-br from-primary-50/60 to-transparent'}`}
       />
 
       {/* Corner icon */}
       <div className={`absolute top-4 right-4 w-8 h-8 rounded-xl flex items-center justify-center
-        ${isDirector ? 'bg-amber-100' : 'bg-primary-100'}`}
+        ${(member.type === 'Director' || member.type === 'Executive Director') ? 'bg-amber-100' : 'bg-primary-100'}`}
       >
-        {isDirector
+        {(member.type === 'Director' || member.type === 'Executive Director')
           ? <Crown className="w-4 h-4 text-amber-600" />
           : <UserCheck className="w-4 h-4 text-primary-600" />}
       </div>
@@ -555,7 +558,7 @@ function LeaderCard({ member, onClick }) {
         <div>
           <h3 className="font-black text-slate-900 text-lg leading-tight">{member.name}</h3>
           <p className={`text-sm font-semibold mt-0.5
-            ${isDirector ? 'text-amber-700' : 'text-primary-700'}`}>
+            ${(member.type === 'Director' || member.type === 'Executive Director') ? 'text-amber-700' : 'text-primary-700'}`}>
             {member.role}
           </p>
         </div>
@@ -576,12 +579,12 @@ function MemberCard({ member, onClick, isAdmin, onDeleteRequest }) {
       animate={{ opacity: 1, y: 0 }}
       whileHover={{ y: -3, scale: 1.02 }}
       transition={{ duration: 0.2 }}
-      className="group relative bg-white border-2 border-gray-100 hover:border-primary-200
+      className="group relative bg-white border-2 border-gray-100 hover:border-rose-200
                  rounded-2xl p-5 shadow-sm hover:shadow-lg transition-all duration-300 cursor-pointer overflow-hidden"
       onClick={() => onClick(member)}
     >
       {/* Hover glow */}
-      <div className="absolute inset-0 bg-gradient-to-br from-primary-50/40 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
+      <div className="absolute inset-0 bg-gradient-to-br from-rose-50/40 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
 
       {/* Admin delete button */}
       {isAdmin && (
@@ -624,7 +627,7 @@ function EmptyState({ isAdmin, onAdd }) {
       <h3 className="text-2xl font-black text-slate-900 mb-2">No team members yet</h3>
       <p className="text-slate-500 font-medium max-w-xs">
         {isAdmin
-          ? 'Start by adding a Director, Team Leader, and your team members.'
+          ? 'Start by adding an executive director, Group Leader, and your team members.'
           : 'The team structure has not been configured yet.'}
       </p>
       {isAdmin && (
@@ -654,10 +657,12 @@ export default function TeamStructure() {
   const [deleting, setDeleting] = useState(false);
 
   /* ── Derived groups ── */
-  const directors    = members.filter((m) => m.type === 'director');
-  const teamLeaders  = members.filter((m) => m.type === 'team_leader');
+  const directors      = members.filter((m) => m.type === 'Director' || m.type === 'Executive Director');
+  const groupLeaders   = members.filter((m) => m.type === 'Group Leader' || m.type === 'team_leader');
   const regularMembers = members.filter((m) => m.type === 'member');
-  const leadershipNodes = [...directors, ...teamLeaders]; // max typically 2
+  
+  // Ensure Executive Director (directors) is on the left and Group Leader (groupLeaders) is on the right
+  const leadershipNodes = [...directors, ...groupLeaders]; 
 
   /* ── Fetch members ── */
   const fetchTeam = useCallback(async () => {
@@ -788,10 +793,10 @@ export default function TeamStructure() {
 
             {/* ── Leadership Row ── */}
             {leadershipNodes.length > 0 && (
-              <div className={`flex justify-center gap-6 ${leadershipNodes.length === 1 ? '' : 'flex-wrap'}`}>
+              <div className="flex justify-center mb-0">
                 <div
-                  className={`grid gap-6 w-full ${
-                    leadershipNodes.length === 1 ? 'max-w-xs' : 'max-w-2xl grid-cols-2'
+                  className={`grid gap-8 w-full ${
+                    leadershipNodes.length === 1 ? 'max-w-xs' : 'max-w-4xl grid-cols-2'
                   } mx-auto`}
                 >
                   {leadershipNodes.map((m, i) => (

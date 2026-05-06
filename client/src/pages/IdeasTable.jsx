@@ -88,6 +88,7 @@ export default function IdeasTable() {
     // 1. Prepare clean data summary for export
     const exportData = sortedAndFilteredIdeas.map(i => ({
       "ID": i.customId || `WS-${i._id.toString().slice(-6).toUpperCase()}`,
+      "Classification": i.classification || "Automation",
       "Function": i.category,
       "Title": i.title,
       "Problem Statement": i.problemStatement || "N/A",
@@ -222,12 +223,13 @@ export default function IdeasTable() {
           <table className="w-full text-left border-collapse">
             <thead>
                <tr className="bg-[#df0a1c] border-b border-slate-600 text-base font-semibold uppercase tracking-wide text-white">
-                <th className="px-12 py-6">ID</th>
-                <th className="px-12 py-6">Function</th>
-                <th className="px-12 py-6">Idea Title</th>
-                <th className="px-12 py-6">Status</th>
-                <th className="px-8 py-6">Submitted Date</th>
-                <th className="px-12 py-6 text-right">View</th>
+                <th className="px-6 py-6 w-24">ID</th>
+                <th className="px-6 py-6 w-24">Class</th>
+                <th className="px-8 py-6 w-48">Function</th>
+                <th className="px-8 py-6 min-w-[300px]">Idea Title</th>
+                <th className="px-8 py-6 w-40">Status</th>
+                <th className="px-6 py-6 w-32">Date</th>
+                <th className="px-6 py-6 text-right">View</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-50">
@@ -236,9 +238,17 @@ export default function IdeasTable() {
                   key={idea._id}
                   className={`group transition-colors ${idx % 2 === 1 ? 'bg-slate-50/30' : 'bg-white'} hover:bg-primary-50/30`}
                 >
-                  <td className="px-6 py-6">
-                    <span className="font-mono text-sm font-black text-primary-600 bg-primary-50 px-3 py-1.5 rounded-lg border border-primary-100">
+                  <td className="px-6 py-6 whitespace-nowrap min-w-fit">
+                    <span className="font-mono text-sm font-black text-primary-600 bg-primary-50 px-3 py-1.5 rounded-lg border border-primary-100 block w-fit">
                       {idea.customId || `WS-${idea._id.toString().slice(-6).toUpperCase()}`}
+                    </span>
+                  </td>
+                  <td className="px-8 py-6">
+                    <span className={`text-[10px] font-black px-3 py-1.5 rounded-lg uppercase tracking-widest border
+                      ${idea.classification === 'AI' 
+                        ? 'bg-violet-50 text-violet-700 border-violet-100' 
+                        : 'bg-emerald-50 text-emerald-700 border-emerald-100'}`}>
+                      {idea.classification === 'AI' ? 'AI' : 'Auto'}
                     </span>
                   </td>
                   <td className="px-8 py-6">

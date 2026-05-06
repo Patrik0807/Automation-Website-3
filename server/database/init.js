@@ -56,16 +56,30 @@ db.serialize(() => {
       // Seed admin user
       const bcrypt = require('bcryptjs');
       db.get('SELECT id FROM users WHERE email = ?', ['admin@test.com'], async (err, user) => {
-        if (!user) {
-          const hash = await bcrypt.hash('admin123', 10);
+        if (user) {
+          const hash = await bcrypt.hash('admin_core_ai#2026', 10);
           db.run(
-            'INSERT INTO users (name, email, password, role, createdAt) VALUES (?, ?, ?, ?, ?)',
-            ['Admin', 'admin@test.com', hash, 'admin', new Date().toISOString()],
+            'UPDATE users SET email = ?, password = ?, name = ? WHERE id = ?',
+            ['ai@coreadmin', hash, 'Admin', user.id],
             (err) => {
-              if (err) console.log('❌ Failed to seed admin user', err);
-              else console.log('✅ Default admin user created (admin@test.com / admin123)');
+              if (err) console.log('❌ Failed to migrate legacy admin user', err);
+              else console.log('✅ Migrated legacy admin@test.com to ai@coreadmin');
             }
           );
+        } else {
+          db.get('SELECT id FROM users WHERE email = ?', ['ai@coreadmin'], async (err, aiUser) => {
+            if (!aiUser) {
+              const hash = await bcrypt.hash('admin_core_ai#2026', 10);
+              db.run(
+                'INSERT INTO users (name, email, password, role, createdAt) VALUES (?, ?, ?, ?, ?)',
+                ['Admin', 'ai@coreadmin', hash, 'admin', new Date().toISOString()],
+                (err) => {
+                  if (err) console.log('❌ Failed to seed admin user', err);
+                  else console.log('✅ Default admin user created (ai@coreadmin / admin_core_ai#2026)');
+                }
+              );
+            }
+          });
         }
       });
     }
@@ -88,7 +102,10 @@ db.serialize(() => {
     ['outcomesAndBenefits', 'TEXT'],
     ['hoursSaved', 'REAL'],
     ['costSaved', 'REAL'],
-    ['statusPipeline', 'TEXT']
+    ['statusPipeline', 'TEXT'],
+    ['classification', 'TEXT'],
+    ['artefacts', 'TEXT'],
+    ['documents', 'TEXT']
   ];
 
   newColumns.forEach(([col, type]) => {
@@ -124,6 +141,11 @@ db.serialize(() => {
     )
   `, (err) => {
     if (err) console.error('❌ Failed to create team_members table:', err.message);
-    else console.log('✅ Team Members table ready');
+    else {
+      console.log('✅ Team Members table ready');
+      // Role Migration: Legacy to New Convention (Director)
+      db.run("UPDATE team_members SET type = 'Director' WHERE type IN ('director', 'executive_director', 'Executive Director')");
+      db.run("UPDATE team_members SET type = 'Group Leader' WHERE type IN ('team_leader', 'group_leader', 'Group Leader')");
+    }
   });
 });

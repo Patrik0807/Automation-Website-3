@@ -20,12 +20,12 @@ router.get('/stats/summary', optionalProtect, getStats);
 router
   .route('/')
   .get(optionalProtect, getIdeas)
-  .post(optionalProtect, upload.array('images', 5), createIdea);
+  .post(optionalProtect, upload.fields([{ name: 'images', maxCount: 10 }, { name: 'artefacts', maxCount: 10 }, { name: 'documents', maxCount: 10 }]), createIdea);
 
 router
   .route('/:id')
   .get(optionalProtect, getIdea)
-  .put(protect, adminOnly, upload.array('images', 5), updateIdea)
+  .put(protect, adminOnly, upload.fields([{ name: 'images', maxCount: 10 }, { name: 'artefacts', maxCount: 10 }, { name: 'documents', maxCount: 10 }]), updateIdea)
   .delete(protect, adminOnly, deleteIdea);
 
 // Admin-only status update

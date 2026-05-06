@@ -2,7 +2,7 @@ const db = require('../config/db');
 const { deleteFiles } = require('../utils/fileHelper');
 
 // Allowed member types — validated on every write
-const VALID_TYPES = ['director', 'team_leader', 'member'];
+const VALID_TYPES = ['Director', 'Group Leader', 'member', 'director', 'team_leader', 'executive_director', 'Executive Director'];
 
 // ─── GET /api/team  (public) ─────────────────────────────────────────────────
 const getTeam = (req, res) => {
@@ -33,7 +33,13 @@ const createMember = (req, res) => {
     return res.status(400).json({ message: 'Role / Job Title is required' });
   }
 
-  const memberType = VALID_TYPES.includes(type) ? type : 'member';
+  // Map legacy strings or incoming types to the canonical versions
+  let memberType = 'member';
+  if (type === 'Director' || type === 'Executive Director' || type === 'director' || type === 'executive_director') {
+    memberType = 'Director';
+  } else if (type === 'Group Leader' || type === 'team_leader' || type === 'group_leader') {
+    memberType = 'Group Leader';
+  }
   const order = Number.isFinite(Number(sortOrder)) ? Number(sortOrder) : 0;
   const createdAt = new Date().toISOString();
 
@@ -86,7 +92,15 @@ const updateMember = (req, res) => {
 
     const newName  = (name  && name.trim())  ? name.trim()  : row.name;
     const newRole  = (role  && role.trim())   ? role.trim()  : row.role;
-    const newType  = VALID_TYPES.includes(type) ? type      : row.type;
+    
+    let newType = row.type;
+    if (type === 'Director' || type === 'Executive Director' || type === 'director' || type === 'executive_director') {
+      newType = 'Director';
+    } else if (type === 'Group Leader' || type === 'team_leader' || type === 'group_leader') {
+      newType = 'Group Leader';
+    } else if (type === 'member') {
+      newType = 'member';
+    }
     const newDesc  = description !== undefined  ? String(description).trim() : row.description;
     const newOrder = sortOrder   !== undefined  ? Number(sortOrder)           : row.sortOrder;
 

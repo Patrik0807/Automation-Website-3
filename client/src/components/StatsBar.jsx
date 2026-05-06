@@ -36,20 +36,20 @@ const statCards = [
     ring:     'border-amber-100',
   },
   {
+    key:      'Testing/Validating',
+    label:    'Testing',
+    icon:     Clock,
+    iconColor: '#8B5CF6', // purple-500
+    bg:       'bg-purple-50',
+    ring:     'border-purple-100',
+  },
+  {
     key:      'Implemented',
     label:    'Implemented',
     icon:     Rocket,
     iconColor: '#16A34A',
     bg:       'bg-green-50',
     ring:     'border-green-100',
-  },
-  {
-    key:      'Rejected',
-    label:    'Rejected',
-    icon:     XCircle,
-    iconColor: '#F43F5E', // rose-500
-    bg:       'bg-rose-50',
-    ring:     'border-rose-100',
   },
 ];
 

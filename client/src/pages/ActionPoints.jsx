@@ -274,9 +274,7 @@ export default function ActionPoints() {
               <p className="text-sm font-semibold text-slate-700">
                 Private notepad — visible to admins only
               </p>
-              <p className="text-xs text-slate-400 mt-0.5">
-                Supports plain text · Auto-saves every 2 seconds · Ctrl+S to save manually
-              </p>
+              
             </div>
             <span className="text-xs font-mono text-slate-400 tabular-nums">
               {charCount.toLocaleString()} chars
@@ -323,7 +321,7 @@ export default function ActionPoints() {
         {/* Tips section */}
         <div className="mt-6 grid grid-cols-1 sm:grid-cols-3 gap-4">
           {[
-            { label: 'Auto-save', desc: 'Content saves automatically 2 seconds after you stop typing.' },
+           // { label: 'Auto-save', desc: 'Content saves automatically 2 seconds after you stop typing.' },
             { label: 'Keyboard shortcut', desc: 'Press Ctrl+S (or ⌘+S on Mac) to save instantly at any time.' },
             { label: 'Admin only', desc: 'This page is private and accessible only to admin accounts.' },
           ].map((tip) => (

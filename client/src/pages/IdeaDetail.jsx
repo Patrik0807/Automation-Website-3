@@ -48,6 +48,10 @@ export default function IdeaDetail() {
 
 
   useEffect(() => {
+    window.scrollTo(0, 0);
+  }, []);
+
+  useEffect(() => {
     if (!id) return;
     fetchIdea();
   }, [id]);
@@ -182,9 +186,17 @@ export default function IdeaDetail() {
                 <div className="flex flex-wrap items-center gap-3">
                   <StatusBadge status={idea.status} size="lg" />
                   <span className="text-slate-600 text-sm flex items-center gap-1.5 font-medium">
-                    <Tag className="w-3.5 h-3.5 text-slate-400" />
                     {idea.category}
                   </span>
+
+                  {idea.classification && (
+                    <span className={`text-[10px] font-black px-3 py-1 rounded-full uppercase tracking-widest border shadow-sm
+                      ${idea.classification === 'AI' 
+                        ? 'bg-violet-50 text-violet-700 border-violet-100 shadow-violet-100' 
+                        : 'bg-emerald-50 text-emerald-700 border-emerald-100 shadow-emerald-100'}`}>
+                      {idea.classification}
+                    </span>
+                  )}
                   <span
                     className={`inline-flex items-center text-[10px] font-bold px-3 py-1 rounded-full uppercase tracking-wider
                       ${
@@ -354,39 +366,33 @@ export default function IdeaDetail() {
               </p>
             </motion.div>
 
-            {/* Attached Images */}
-            {Array.isArray(idea.images) && idea.images.length > 0 && (
+            {/* Attached Documents Section (Combined Images + Docs) */}
+            {((Array.isArray(idea.images) && idea.images.length > 0) || (Array.isArray(idea.documents) && idea.documents.length > 0)) && (
               <motion.div
                 initial={{ opacity: 0, y: 10 }}
                 animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: 0.05 }}
+                transition={{ delay: 0.1 }}
                 className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6"
               >
                 <h2 className="text-lg font-bold text-slate-800 mb-4 flex items-center gap-2">
-                  <Image className="w-5 h-5 text-primary-500" />
-                  Attached Files
+                  <FileIcon className="w-5 h-5 text-primary-500" />
+                  Attached Documents
                   <span className="text-sm font-normal text-slate-400">
-                    ({idea.images.length})
+                    ({(idea.images?.length || 0) + (idea.documents?.length || 0)})
                   </span>
                 </h2>
-                <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-                  {idea.images.map((img, i) => {
-                    const actualIsImg = isImage(img);
-                    return (
-                    <motion.div
-                      key={i}
-                      whileHover={{ scale: 1.02 }}
-                      className="aspect-video rounded-xl overflow-hidden border border-gray-200
-                                 cursor-pointer hover:shadow-md transition-shadow bg-gray-50 flex items-center justify-center p-2"
-                      onClick={() => {
-                        if (actualIsImg) {
-                          setSelectedImage(img);
-                        } else {
-                          window.open(img, '_blank');
-                        }
-                      }}
-                    >
-                      {actualIsImg ? (
+                
+                {/* Images Grid */}
+                {Array.isArray(idea.images) && idea.images.length > 0 && (
+                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 mb-4">
+                    {idea.images.map((img, i) => (
+                      <motion.div
+                        key={`img-${i}`}
+                        whileHover={{ scale: 1.02 }}
+                        className="aspect-video rounded-xl overflow-hidden border border-gray-200
+                                   cursor-pointer hover:shadow-md transition-shadow bg-gray-50 flex items-center justify-center"
+                        onClick={() => setSelectedImage(img)}
+                      >
                         <img
                           src={img}
                           alt={`Attachment ${i + 1}`}
@@ -396,15 +402,84 @@ export default function IdeaDetail() {
                             e.target.src = 'https://placehold.co/800x400/f8fafc/64748b?text=Image+Unavailable';
                           }}
                         />
-                      ) : (
-                        <div className="flex flex-col items-center justify-center text-primary-600 gap-2 w-full h-full p-4">
-                          <FileIcon className="w-10 h-10" />
-                          <span className="text-xs font-semibold text-center truncate w-full px-2" title={img.split('/').pop()}>
-                            {img.split('/').pop()}
-                          </span>
+                      </motion.div>
+                    ))}
+                  </div>
+                )}
+
+                {/* Non-Image Documents List */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  {Array.isArray(idea.documents) && idea.documents.map((file, i) => {
+                    const fileName = file.split('/').pop();
+                    const actualIsImg = isImage(file);
+                    
+                    // If it's an image, we already showed it in the grid above (if it was in images array)
+                    // But if it's in the documents array, we show it here as a document or a mini-thumb
+                    return (
+                      <a
+                        key={`doc-${i}`}
+                        href={file}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="flex items-center gap-3 p-4 rounded-xl border border-gray-100 bg-slate-50 hover:bg-primary-50 hover:border-primary-200 transition-all group"
+                      >
+                        <div className="w-10 h-10 bg-white rounded-lg flex items-center justify-center shadow-sm border border-gray-100 text-primary-500 group-hover:scale-110 transition-transform overflow-hidden">
+                          {actualIsImg ? (
+                            <img src={file} className="w-full h-full object-cover" />
+                          ) : (
+                            <FileIcon className="w-5 h-5" />
+                          )}
                         </div>
-                      )}
-                    </motion.div>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-bold text-slate-700 truncate">{fileName}</p>
+                          <p className="text-[10px] font-bold text-primary-600 uppercase tracking-widest">View Document</p>
+                        </div>
+                      </a>
+                    );
+                  })}
+                </div>
+              </motion.div>
+            )}
+
+            {/* Solution Assets Section */}
+            {Array.isArray(idea.artefacts) && idea.artefacts.length > 0 && (
+              <motion.div
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.15 }}
+                className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6"
+              >
+                <h2 className="text-lg font-bold text-slate-800 mb-4 flex items-center gap-2">
+                  <FileIcon className="w-5 h-5 text-indigo-500" />
+                  Solution Assets
+                  <span className="text-sm font-normal text-slate-400">
+                    ({idea.artefacts.length})
+                  </span>
+                </h2>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  {idea.artefacts.map((file, i) => {
+                    const fileName = file.split('/').pop();
+                    const actualIsImg = isImage(file);
+                    return (
+                      <a
+                        key={`art-${i}`}
+                        href={file}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="flex items-center gap-3 p-4 rounded-xl border border-gray-100 bg-slate-50 hover:bg-indigo-50 hover:border-indigo-200 transition-all group"
+                      >
+                        <div className="w-10 h-10 bg-white rounded-lg flex items-center justify-center shadow-sm border border-gray-100 text-indigo-500 group-hover:scale-110 transition-transform overflow-hidden">
+                          {actualIsImg ? (
+                            <img src={file} className="w-full h-full object-cover" />
+                          ) : (
+                            <FileIcon className="w-5 h-5" />
+                          )}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-bold text-slate-700 truncate">{fileName}</p>
+                          <p className="text-[10px] font-bold text-indigo-600 uppercase tracking-widest">Download Asset</p>
+                        </div>
+                      </a>
                     );
                   })}
                 </div>
@@ -485,12 +560,21 @@ export default function IdeaDetail() {
 
               {/* Pipeline stages */}
               <div className="space-y-0">
-                {pipeline.map((stage, idx) => {
+                {pipeline
+                  .filter(stage => isAdmin || stage.status !== 'Rejected')
+                  .map((stage, idx) => {
                   const StageIcon = STAGE_ICONS[stage.status] || CheckCircle2;
                   const isCompleted = stage.completed;
-                  const isActive = !isCompleted && pipeline.slice(0, idx).every(s => s.completed);
+                  // Sequential active: NOT completed AND previous one IS completed AND stage is NOT Rejected
+                  // ALSO: if "Implemented" is already completed, nothing else can be active
+                  const implementedCompleted = pipeline.find(s => s.status === 'Implemented')?.completed;
+                  const isActive = !isCompleted && 
+                                   !implementedCompleted && 
+                                   stage.status !== 'Rejected' && 
+                                   pipeline.slice(0, idx).every(s => s.completed);
                   const isEditingDeadline = deadlineEdit?.index === idx;
-                  const isLast = idx === pipeline.length - 1;
+                  const filteredPipeline = pipeline.filter(stage => isAdmin || stage.status !== 'Rejected');
+                  const isLast = idx === filteredPipeline.length - 1;
                   const savingThis = pipelineLoading === idx;
 
                   return (
@@ -609,14 +693,7 @@ export default function IdeaDetail() {
                             </div>
                           )}
 
-                          {/* Users see deadline (but can't edit) */}
-                          {!isAdmin && stage.deadline && (
-                            <p className="text-[11px] text-amber-700 font-semibold mt-0.5">
-                              Due {new Date(stage.deadline).toLocaleDateString('en-IN', {
-                                day: 'numeric', month: 'short', year: 'numeric'
-                              })}
-                            </p>
-                          )}
+
                         </div>
                       </div>
                     </div>

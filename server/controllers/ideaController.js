@@ -90,10 +90,12 @@ const getIdeas = (req, res) => {
   const normalized = rows.map((row) => ({
         ...row,
         _id: String(row.id),
-        images: row.images ? JSON.parse(row.images) : [],
         impact: row.impact ? JSON.parse(row.impact) : {},
         statusHistory: row.statusHistory ? JSON.parse(row.statusHistory) : [],
         statusPipeline: parsePipeline(row.statusPipeline, row.status, row.createdAt),
+        images: row.images ? JSON.parse(row.images) : [],
+        artefacts: row.artefacts ? JSON.parse(row.artefacts) : [],
+        documents: row.documents ? JSON.parse(row.documents) : []
       }));
 
 
@@ -121,6 +123,8 @@ const getIdea = (req, res) => {
         ...row,
         _id: String(row.id),
         images: row.images ? JSON.parse(row.images) : [],
+        artefacts: row.artefacts ? JSON.parse(row.artefacts) : [],
+        documents: row.documents ? JSON.parse(row.documents) : [],
         impact: row.impact ? JSON.parse(row.impact) : {},
         statusHistory: row.statusHistory ? JSON.parse(row.statusHistory) : [],
         statusPipeline: parsePipeline(row.statusPipeline, row.status, row.createdAt),
@@ -149,6 +153,7 @@ const createIdea = (req, res) => {
       impact,
       hoursSaved,
       costSaved,
+      classification,
       createdAt
     } = req.body;
 
@@ -167,10 +172,16 @@ const createIdea = (req, res) => {
     }
 
     // Collect uploaded image paths (local storage)
-    const imagePaths = req.files
-      ? req.files.map((file) =>
-        `/uploads/ideas/${file.filename}`
-      )
+    const imagePaths = req.files && req.files.images
+      ? req.files.images.map((file) => `/uploads/ideas/${file.filename}`)
+      : [];
+
+    const artefactPaths = req.files && req.files.artefacts
+      ? req.files.artefacts.map((file) => `/uploads/ideas/${file.filename}`)
+      : [];
+    
+    const documentPaths = req.files && req.files.documents
+      ? req.files.documents.map((file) => `/uploads/ideas/${file.filename}`)
       : [];
 
     // Determine submitter
@@ -212,9 +223,12 @@ const createIdea = (req, res) => {
         hoursSaved,
         costSaved,
         submittedBy,
+        classification,
+        artefacts,
+        documents,
         createdAt
       )
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `,
       [
         title,
@@ -236,6 +250,9 @@ const createIdea = (req, res) => {
         hoursSaved || 0,
         costSaved || 0,
         submitterId,
+        classification || 'Automation',
+        JSON.stringify(artefactPaths),
+        JSON.stringify(documentPaths),
         submissionDate
       ],
 
@@ -312,11 +329,38 @@ const updateIdea = async (req, res) => {
     }
 
     // 4. Append newly uploaded images
-    const newImagePaths = req.files ? req.files.map((file) => `/uploads/ideas/${file.filename}`) : [];
+    const newImagePaths = req.files && req.files.images ? req.files.images.map((file) => `/uploads/ideas/${file.filename}`) : [];
     updatedImages = [...updatedImages, ...newImagePaths];
+
+    // Handle Artefacts
+    let existingArtefacts = [];
+    if (row.artefacts) {
+      try { existingArtefacts = JSON.parse(row.artefacts); } catch { existingArtefacts = []; }
+    }
+    const parsedDeletedArtefacts = req.body.deletedArtefacts ? JSON.parse(req.body.deletedArtefacts) : [];
+    let updatedArtefacts = existingArtefacts.filter(art => !parsedDeletedArtefacts.includes(art));
+    if (parsedDeletedArtefacts.length > 0) {
+      deleteFiles(parsedDeletedArtefacts);
+    }
+    const newArtefactPaths = req.files && req.files.artefacts ? req.files.artefacts.map((file) => `/uploads/ideas/${file.filename}`) : [];
+    updatedArtefacts = [...updatedArtefacts, ...newArtefactPaths];
+
+    // Handle Documents
+    let existingDocuments = [];
+    if (row.documents) {
+      try { existingDocuments = JSON.parse(row.documents); } catch { existingDocuments = []; }
+    }
+    const parsedDeletedDocuments = req.body.deletedDocuments ? JSON.parse(req.body.deletedDocuments) : [];
+    let updatedDocuments = existingDocuments.filter(doc => !parsedDeletedDocuments.includes(doc));
+    if (parsedDeletedDocuments.length > 0) {
+      deleteFiles(parsedDeletedDocuments);
+    }
+    const newDocumentPaths = req.files && req.files.documents ? req.files.documents.map((file) => `/uploads/ideas/${file.filename}`) : [];
+    updatedDocuments = [...updatedDocuments, ...newDocumentPaths];
 
     // Determine values to update (fallback to existing if not provided)
     const newTitle = title || row.title;
+    const newClassification = req.body.classification || row.classification;
     const newProblemStatement = problemStatement || row.problemStatement;
     const newDescription = description || row.description;
     const newCategory = category || row.category;
@@ -336,10 +380,10 @@ const updateIdea = async (req, res) => {
     db.run(
       `
       UPDATE ideas
-      SET title = ?, problemStatement = ?, description = ?, category = ?, priority = ?, technicalFeasibility = ?, status = ?, impact = ?, images = ?, businessImpact = ?, expectedDeliveryDate = ?, assignedReviewer = ?, outcomesAndBenefits = ?, hoursSaved = ?, costSaved = ?, createdAt = ?
+      SET title = ?, problemStatement = ?, description = ?, category = ?, priority = ?, technicalFeasibility = ?, status = ?, impact = ?, images = ?, businessImpact = ?, expectedDeliveryDate = ?, assignedReviewer = ?, outcomesAndBenefits = ?, hoursSaved = ?, costSaved = ?, classification = ?, artefacts = ?, documents = ?, createdAt = ?
       WHERE id = ?
       `,
-      [newTitle, newProblemStatement, newDescription, newCategory, newPriority, newTechnicalFeasibility, newStatus, newImpact, JSON.stringify(updatedImages), newBusinessImpact, newExpectedDeliveryDate, newAssignedReviewer, newOutcomesAndBenefits, newHoursSaved, newCostSaved, newCreatedAt, req.params.id],
+      [newTitle, newProblemStatement, newDescription, newCategory, newPriority, newTechnicalFeasibility, newStatus, newImpact, JSON.stringify(updatedImages), newBusinessImpact, newExpectedDeliveryDate, newAssignedReviewer, newOutcomesAndBenefits, newHoursSaved, newCostSaved, newClassification, JSON.stringify(updatedArtefacts), JSON.stringify(updatedDocuments), newCreatedAt, req.params.id],
       function (err) {
         if (err) return res.status(500).json({ message: err.message });
 
@@ -362,6 +406,9 @@ const updateIdea = async (req, res) => {
           hoursSaved: newHoursSaved,
           costSaved: newCostSaved,
           createdAt: newCreatedAt,
+          classification: newClassification,
+          artefacts: updatedArtefacts,
+          documents: updatedDocuments,
           statusHistory: row.statusHistory ? JSON.parse(row.statusHistory) : []
         });
         resolve();
@@ -467,18 +514,25 @@ const deleteIdea = async (req, res) => {
   try {
     await ideaMutex.runExclusive(req.params.id, async () => {
       return new Promise((resolve) => {
-        db.get('SELECT images FROM ideas WHERE id = ?', [req.params.id], (err, row) => {
+        db.get('SELECT images, artefacts FROM ideas WHERE id = ?', [req.params.id], (err, row) => {
           if (err) { res.status(500).json({ message: err.message }); return resolve(); }
           if (!row) { res.status(404).json({ message: 'Idea not found' }); return resolve(); }
 
-          const images = row.images ? JSON.parse(row.images) : [];
+          let images = [];
+          try { images = JSON.parse(row.images || '[]'); } catch (e) {}
+          let artefacts = [];
+          try { artefacts = JSON.parse(row.artefacts || '[]'); } catch (e) {}
+          
+          const allFiles = [...images, ...artefacts];
 
           db.run('DELETE FROM ideas WHERE id = ?', [req.params.id], function (err) {
             if (err) { res.status(500).json({ message: err.message }); return resolve(); }
             if (this.changes === 0) { res.status(404).json({ message: 'Idea not found' }); return resolve(); }
             
             // Clean physical directory payload asynchronously
-            deleteFiles(images);
+            if (allFiles.length > 0) {
+              deleteFiles(allFiles);
+            }
             
             res.json({ message: 'Idea deleted successfully' });
             resolve();

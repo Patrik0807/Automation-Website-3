@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { X, Lightbulb, Send, ImagePlus, Trash2, File as FileIcon } from 'lucide-react';
+import { X, Lightbulb, Send, ImagePlus, Trash2, File as FileIcon, Upload } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { useAuth } from '../context/AuthContext';
 import API from '../api/ideas';
@@ -28,18 +28,32 @@ export default function IdeaForm({ isOpen, onClose, onCreated, initialData }) {
     hoursSaved: '',
     costSaved: '',
     submittedByEmail: '',
+    classification: 'Automation',
     createdAt: new Date().toISOString().split('T')[0]
   });
 
   const { user } = useAuth();
-  const [images, setImages] = useState([]); // For preview & display
-  const [previews, setPreviews] = useState([]);
-  const [newFiles, setNewFiles] = useState([]); // New File uploads
-  const [deletedImages, setDeletedImages] = useState([]); // Track deleted existing images
-  const [loading, setLoading] = useState(false);
-  const fileInputRef = useRef(null);
+  
+  // Images
+  const [images, setImages] = useState([]);
+  const [newImageFiles, setNewImageFiles] = useState([]);
+  const [deletedImages, setDeletedImages] = useState([]);
+  
+  // Solution Assets (Technical)
+  const [artefacts, setArtefacts] = useState([]);
+  const [newArtefactFiles, setNewArtefactFiles] = useState([]);
+  const [deletedArtefacts, setDeletedArtefacts] = useState([]);
 
-  // Initialize form & images on modal open
+  // Documents (PDF/DOC)
+  const [documents, setDocuments] = useState([]);
+  const [newDocumentFiles, setNewDocumentFiles] = useState([]);
+  const [deletedDocuments, setDeletedDocuments] = useState([]);
+
+  const [loading, setLoading] = useState(false);
+  const imageInputRef = useRef(null);
+  const artefactInputRef = useRef(null);
+  const documentInputRef = useRef(null);
+
   useEffect(() => {
     if (isOpen) {
       if (initialData) {
@@ -57,14 +71,19 @@ export default function IdeaForm({ isOpen, onClose, onCreated, initialData }) {
           hoursSaved: initialData.hoursSaved || '',
           costSaved: initialData.costSaved || '',
           submittedByEmail: initialData.submittedByEmail || '',
+          classification: initialData.classification || 'Automation',
           createdAt: initialData.createdAt ? initialData.createdAt.split('T')[0] : new Date().toISOString().split('T')[0]
         });
 
-        const existingImages = initialData.images || [];
-        setImages(existingImages);
-        setPreviews(existingImages);
-        setNewFiles([]);
+        setImages(initialData.images || []);
+        setArtefacts(initialData.artefacts || []);
+        setDocuments(initialData.documents || []);
+        setNewImageFiles([]);
+        setNewArtefactFiles([]);
+        setNewDocumentFiles([]);
         setDeletedImages([]);
+        setDeletedArtefacts([]);
+        setDeletedDocuments([]);
       } else {
         setForm({
           title: '',
@@ -80,69 +99,65 @@ export default function IdeaForm({ isOpen, onClose, onCreated, initialData }) {
           hoursSaved: '',
           costSaved: '',
           submittedByEmail: user?.email || '',
+          classification: 'Automation',
           createdAt: new Date().toISOString().split('T')[0]
         });
         setImages([]);
-        setPreviews([]);
-        setNewFiles([]);
+        setArtefacts([]);
+        setDocuments([]);
+        setNewImageFiles([]);
+        setNewArtefactFiles([]);
+        setNewDocumentFiles([]);
         setDeletedImages([]);
+        setDeletedArtefacts([]);
+        setDeletedDocuments([]);
       }
     }
   }, [initialData, isOpen, user]);
 
-  // Handle new image selection
-  const handleImageSelect = (e) => {
+  const handleDocumentSelect = (e) => {
     const files = Array.from(e.target.files);
-    if (images.length + files.length > 5) {
-      toast.error('Maximum 5 attachments allowed');
-      return;
-    }
-
-    const validFiles = files.filter((f) => 
-      f.type.startsWith('image/') || 
-      f.type === 'application/pdf' || 
-      f.name.endsWith('.doc') || 
-      f.name.endsWith('.docx') ||
-      f.name.endsWith('.exe') ||
-      f.name.endsWith('.zip') ||
-      f.name.endsWith('.py')
-    );
-    if (validFiles.length !== files.length) {
-      toast.error('Only images, PDFs, Word, EXE, ZIP, and Python files are allowed');
-    }
-
-    setNewFiles((prev) => [...prev, ...validFiles]);
-    const newPreviews = validFiles.map((file) => ({
-      url: URL.createObjectURL(file), // temporary URL for preview
-      name: file.name
-    }));
-    
-    // We append the URL/name object onto our preview queue
-    // but the `images` state array expects string URLs when editing existing ones
-    // We can map them smoothly
-    setPreviews((prev) => [...prev, ...newPreviews.map(p => p.url)]);
-    // Pass fake paths containing the filename so we can parse extension for UI
-    setImages((prev) => [...prev, ...newPreviews.map(p => p.url + '###' + p.name)]);
+    setNewDocumentFiles(prev => [...prev, ...files]);
+    // Previews: use ObjectURL for images, name for others
+    const previews = files.map(f => f.type.startsWith('image/') ? URL.createObjectURL(f) : f.name);
+    setDocuments(prev => [...prev, ...previews]);
   };
 
-  // Remove image (existing or new)
+  const handleArtefactSelect = (e) => {
+    const files = Array.from(e.target.files);
+    setNewArtefactFiles(prev => [...prev, ...files]);
+    const previews = files.map(f => f.type.startsWith('image/') ? URL.createObjectURL(f) : f.name);
+    setArtefacts(prev => [...prev, ...previews]);
+  };
+
   const removeImage = (index) => {
     const removed = images[index];
-
-    // If it's an existing image URL, mark for deletion
     if (initialData?.images?.includes(removed)) {
-      setDeletedImages((prev) => [...prev, removed]);
+      setDeletedImages(prev => [...prev, removed]);
     } else {
-      // It's a new file, remove from newFiles
-      setNewFiles((prev) =>
-        prev.filter((f) => URL.createObjectURL(f) !== removed)
-      );
-      URL.revokeObjectURL(removed);
+      setNewImageFiles(prev => prev.filter((_, i) => i !== (index - (initialData?.images?.length || 0))));
     }
+    setImages(prev => prev.filter((_, i) => i !== index));
+  };
 
-    // Remove from images and previews
-    setImages((prev) => prev.filter((_, i) => i !== index));
-    setPreviews((prev) => prev.filter((_, i) => i !== index));
+  const removeArtefact = (index) => {
+    const removed = artefacts[index];
+    if (initialData?.artefacts?.includes(removed)) {
+      setDeletedArtefacts(prev => [...prev, removed]);
+    } else {
+      setNewArtefactFiles(prev => prev.filter((_, i) => i !== (index - (initialData?.artefacts?.length || 0))));
+    }
+    setArtefacts(prev => prev.filter((_, i) => i !== index));
+  };
+
+  const removeDocument = (index) => {
+    const removed = documents[index];
+    if (initialData?.documents?.includes(removed)) {
+      setDeletedDocuments(prev => [...prev, removed]);
+    } else {
+      setNewDocumentFiles(prev => prev.filter((_, i) => i !== (index - (initialData?.documents?.length || 0))));
+    }
+    setDocuments(prev => prev.filter((_, i) => i !== index));
   };
 
   const handleChange = (e) => {
@@ -159,26 +174,17 @@ export default function IdeaForm({ isOpen, onClose, onCreated, initialData }) {
     setLoading(true);
     try {
       const formData = new FormData();
-      formData.append('title', form.title);
-      formData.append('problemStatement', form.problemStatement);
-      formData.append('description', form.description);
-      formData.append('category', form.category);
-      formData.append('priority', form.priority);
-      formData.append('technicalFeasibility', form.technicalFeasibility);
-      formData.append('submittedByEmail', form.submittedByEmail);
-      formData.append('businessImpact', form.businessImpact);
-      formData.append('expectedDeliveryDate', form.expectedDeliveryDate);
-      formData.append('assignedReviewer', form.assignedReviewer);
-      formData.append('outcomesAndBenefits', form.outcomesAndBenefits);
-      formData.append('hoursSaved', form.hoursSaved);
-      formData.append('costSaved', form.costSaved);
-      formData.append('createdAt', form.createdAt);
+      Object.keys(form).forEach(key => formData.append(key, form[key]));
 
-      // Append new file uploads
-      newFiles.forEach((file) => formData.append('images', file));
+      // Append files
+      newImageFiles.forEach(file => formData.append('images', file));
+      newArtefactFiles.forEach(file => formData.append('artefacts', file));
+      newDocumentFiles.forEach(file => formData.append('documents', file));
 
-      // Include deleted existing images
+      // Deleted tracks
       formData.append('deletedImages', JSON.stringify(deletedImages));
+      formData.append('deletedArtefacts', JSON.stringify(deletedArtefacts));
+      formData.append('deletedDocuments', JSON.stringify(deletedDocuments));
 
       let responseData;
       if (initialData) {
@@ -193,31 +199,6 @@ export default function IdeaForm({ isOpen, onClose, onCreated, initialData }) {
       }
 
       onCreated(responseData);
-
-      // Reset form
-      setForm({
-        title: '',
-        problemStatement: '',
-        description: '',
-        category: '',
-        priority: 'Medium',
-        technicalFeasibility: 'Moderate',
-        businessImpact: 'Medium',
-        expectedDeliveryDate: '',
-        assignedReviewer: '',
-        outcomesAndBenefits: '',
-        hoursSaved: '',
-        costSaved: '',
-        submittedByEmail: user?.email || '',
-        createdAt: new Date().toISOString().split('T')[0]
-      });
-      setImages([]);
-      setPreviews((prev) => {
-        prev.forEach(URL.revokeObjectURL);
-        return [];
-      });
-      setNewFiles([]);
-      setDeletedImages([]);
       onClose();
     } catch (error) {
       toast.error(error.response?.data?.message || 'Failed to submit idea');
@@ -235,7 +216,6 @@ export default function IdeaForm({ isOpen, onClose, onCreated, initialData }) {
           exit={{ opacity: 0 }}
           className="fixed inset-0 z-50 flex items-center justify-center p-4"
         >
-          {/* Backdrop */}
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
@@ -244,7 +224,6 @@ export default function IdeaForm({ isOpen, onClose, onCreated, initialData }) {
             className="absolute inset-0 bg-slate-900/50 backdrop-blur-sm"
           />
 
-          {/* Modal */}
           <motion.div
             initial={{ opacity: 0, scale: 0.9, y: 20 }}
             animate={{ opacity: 1, scale: 1, y: 0 }}
@@ -253,7 +232,7 @@ export default function IdeaForm({ isOpen, onClose, onCreated, initialData }) {
             className="relative bg-white rounded-3xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-hidden"
           >
             {/* Header */}
-            <div className="sticky top-0 bg-gradient-to-r from-primary-500 to-primary-600 p-6 rounded-t-3xl">
+            <div className="sticky top-0 bg-gradient-to-r from-primary-500 to-primary-600 p-6 rounded-t-3xl z-10">
               <button
                 onClick={onClose}
                 className="absolute top-4 right-4 text-white/80 hover:text-white
@@ -270,335 +249,173 @@ export default function IdeaForm({ isOpen, onClose, onCreated, initialData }) {
                     {initialData ? 'Edit Idea' : 'Submit New Idea'}
                   </h2>
                   <p className="text-primary-100 text-sm">
-                    {initialData
-                      ? 'Update details and add new attachments'
-                      : ''}
+                    {initialData ? 'Update details and project artefacts' : 'Capture your innovation details'}
                   </p>
                 </div>
               </div>
             </div>
 
             {/* Form */}
-            <form onSubmit={handleSubmit} className="p-6 space-y-5 overflow-y-auto max-h-[calc(90vh-120px)]">
+            <form onSubmit={handleSubmit} className="p-6 space-y-6 overflow-y-auto max-h-[calc(90vh-120px)]">
+              
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {/* Category */}
+                <div>
+                  <label className="block text-sm font-semibold text-slate-700 mb-2">Function <span className="text-red-500">*</span></label>
+                  <select name="category" value={form.category} onChange={handleChange} className="select-field" required>
+                    <option value="">Select a category</option>
+                    {categories.map(cat => <option key={cat} value={cat}>{cat}</option>)}
+                  </select>
+                </div>
 
-               {/* Category */}
-              <div>
-                <label className="block text-sm font-semibold text-slate-700 mb-2">
-                  Function <span className="text-red-500">*</span>
-                </label>
-                <select
-                  name="category"
-                  value={form.category}
-                  onChange={handleChange}
-                  className="select-field"
-                  required
-                >
-                  <option value="">Select a category</option>
-                  {categories.map((cat) => (
-                    <option key={cat} value={cat}>
-                      {cat}
-                    </option>
-                  ))}
-                </select>
+                {/* Classification */}
+                <div>
+                  <label className="block text-sm font-semibold text-slate-700 mb-2">Classification <span className="text-red-500">*</span></label>
+                  <div className="flex gap-2">
+                    {['Automation', 'AI'].map(type => (
+                      <button
+                        key={type}
+                        type="button"
+                        onClick={() => setForm({ ...form, classification: type })}
+                        className={`flex-1 py-2 rounded-xl border-2 font-bold transition-all ${form.classification === type ? 'border-primary-500 bg-primary-50 text-primary-700' : 'border-gray-100 bg-gray-50 text-slate-500'}`}
+                      >
+                        {type}
+                      </button>
+                    ))}
+                  </div>
+                </div>
               </div>
 
               {/* Title */}
               <div>
-                <label className="block text-sm font-semibold text-slate-700 mb-2">
-                  Idea Title <span className="text-red-500">*</span>
-                </label>
-                <input
-                  name="title"
-                  value={form.title}
-                  onChange={handleChange}
-                  placeholder="e.g., Automated Invoice Processing"
-                  className="input-field"
-                  required
-                />
+                <label className="block text-sm font-semibold text-slate-700 mb-2">Idea Title <span className="text-red-500">*</span></label>
+                <input name="title" value={form.title} onChange={handleChange} placeholder="e.g. ASRS Optimization" className="input-field" required />
               </div>
 
-              {/* Submitter email (Visible for Guests) */}
-              <div>
-                <label className="block text-sm font-semibold text-slate-700 mb-2">
-                  Your Email <span className="text-red-500">*</span>
-                </label>
-                <input
-                  type="email"
-                  name="submittedByEmail"
-                  value={form.submittedByEmail}
-                  onChange={handleChange}
-                  placeholder="Enter your Email"
-                  className="input-field"
-                  required
-                />
-              </div>
-
-              {/* Submitted On Date */}
-              <div>
-                <label className="block text-sm font-semibold text-slate-700 mb-2">
-                  Submitted On <span className="text-red-500">*</span>
-                </label>
-                <input
-                  type="date"
-                  name="createdAt"
-                  value={form.createdAt}
-                  onChange={handleChange}
-                  className="input-field max-w-[200px]"
-                  required
-                />
-              </div>
-
-             
-
-              {/* Priority & Feasibility */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              {/* Submitter & Date */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-sm font-semibold text-slate-700 mb-2">
-                    Priority <span className="text-red-500">*</span>
-                  </label>
-                  <select
-                    name="priority"
-                    value={form.priority}
-                    onChange={handleChange}
-                    className="select-field"
-                    required
-                  >
-                    <option value="High">High</option>
-                    <option value="Medium">Medium</option>
-                    <option value="Low">Low</option>
-                  </select>
+                  <label className="block text-sm font-semibold text-slate-700 mb-2">Your Email <span className="text-red-500">*</span></label>
+                  <input type="email" name="submittedByEmail" value={form.submittedByEmail} onChange={handleChange} className="input-field" required />
                 </div>
                 <div>
-                  <label className="block text-sm font-semibold text-slate-700 mb-2">
-                    Technical Feasibility <span className="text-red-500">*</span>
-                  </label>
-                  <select
-                    name="technicalFeasibility"
-                    value={form.technicalFeasibility}
-                    onChange={handleChange}
-                    className="select-field"
-                    required
-                  >
-                    <option value="Easy">Easy</option>
-                    <option value="Moderate">Moderate</option>
-                    <option value="Complex">Complex</option>
-                  </select>
+                  <label className="block text-sm font-semibold text-slate-700 mb-2">Submitted On</label>
+                  <input type="date" name="createdAt" value={form.createdAt} onChange={handleChange} className="input-field" required />
                 </div>
               </div>
 
-              {/* Business Impact & Assigned Reviewer */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              {/* Problem & Solution */}
+              <div className="space-y-4">
                 <div>
-                  <label className="block text-sm font-semibold text-slate-700 mb-2">
-                    Business Impact <span className="text-red-500">*</span>
-                  </label>
-                  <select
-                    name="businessImpact"
-                    value={form.businessImpact}
-                    onChange={handleChange}
-                    className="select-field"
-                    required
-                  >
-                    <option value="High">High</option>
-                    <option value="Medium">Medium</option>
-                    <option value="Low">Low</option>
-                  </select>
+                  <label className="block text-sm font-semibold text-slate-700 mb-2">Problem Statement <span className="text-red-500">*</span></label>
+                  <textarea name="problemStatement" value={form.problemStatement} onChange={handleChange} className="input-field min-h-[80px]" required />
                 </div>
                 <div>
-                  <label className="block text-sm font-semibold text-slate-700 mb-2">
-                    Assigned Reviewer <span className="text-xs text-slate-400 font-normal">(optional)</span>
-                  </label>
-                  <input
-                    name="assignedReviewer"
-                    value={form.assignedReviewer}
-                    onChange={handleChange}
-                    placeholder="Enter reviewer name"
-                    className="input-field"
-                  />
+                  <label className="block text-sm font-semibold text-slate-700 mb-2">Proposed Solution <span className="text-red-500">*</span></label>
+                  <textarea name="description" value={form.description} onChange={handleChange} className="input-field min-h-[120px]" required />
                 </div>
               </div>
 
-              {/* Expected Delivery Date */}
-              <div>
-                <label className="block text-sm font-semibold text-slate-700 mb-2">
-                  Expected Delivery Date <span className="text-xs text-slate-400 font-normal">(optional)</span>
-                </label>
-                <input
-                  type="date"
-                  name="expectedDeliveryDate"
-                  value={form.expectedDeliveryDate}
-                  onChange={handleChange}
-                  className="input-field max-w-[200px]"
-                />
-              </div>
-
-              {/* Problem Statement */}
-              <div>
-                <label className="block text-sm font-semibold text-slate-700 mb-2">
-                  Problem Statement <span className="text-red-500">*</span>
-                </label>
-                <textarea
-                  name="problemStatement"
-                  value={form.problemStatement}
-                  onChange={handleChange}
-                  placeholder="What is the problem or pain point you're trying to solve?"
-                  className="input-field min-h-[100px] resize-y"
-                  required
-                />
-              </div>
-
-              {/* Description / Proposed Solution */}
-              <div>
-                <label className="block text-sm font-semibold text-slate-700 mb-2">
-                  Description / Proposed Solution <span className="text-red-500">*</span>
-                </label>
-                <textarea
-                  name="description"
-                  value={form.description}
-                  onChange={handleChange}
-                  placeholder="Describe your idea in detail — what problem does it solve and how?"
-                  rows={4}
-                  className="input-field resize-none"
-                  required
-                />
-              </div>
-
-              {/* Outcomes and Benefits Section */}
-              <div className="bg-primary-50 rounded-2xl p-5 border border-primary-100">
-                <h3 className="text-sm font-bold text-primary-700 mb-3 flex items-center gap-2">
-                  📊 Outcomes and Benefits
-                </h3>
-                <textarea
-                  name="outcomesAndBenefits"
-                  value={form.outcomesAndBenefits}
-                  onChange={handleChange}
-                  placeholder="Describe the outcomes and benefits from this idea in terms of Efforts and Cost"
-                  rows={3}
-                  className="input-field min-h-[80px] resize-y"
-                />
-                
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-4">
+              {/* Impact Metrics */}
+              <div className="bg-slate-50 p-5 rounded-2xl border border-gray-100 space-y-4">
+                <h3 className="text-sm font-bold text-slate-800 uppercase tracking-widest">Impact & Benefits</h3>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div>
-                    <label className="block text-xs font-bold text-primary-600 mb-2 uppercase tracking-wider">
-                      Est. Hours Saved
-                    </label>
-                    <input
-                      type="number"
-                      name="hoursSaved"
-                      value={form.hoursSaved}
-                      onChange={handleChange}
-                      placeholder="e.g. 150"
-                      className="input-field"
-                    />
+                    <label className="block text-xs font-bold text-slate-500 mb-1 uppercase">Hours Saved</label>
+                    <input type="number" name="hoursSaved" value={form.hoursSaved} onChange={handleChange} className="input-field" />
                   </div>
                   <div>
-                    <label className="block text-xs font-bold text-primary-600 mb-2 uppercase tracking-wider">
-                      Est. Cost Savings 
-                    </label>
-                    <input
-                      type="number"
-                      name="costSaved"
-                      value={form.costSaved}
-                      onChange={handleChange}
-                      placeholder="Enter value in EUR"
-                      className="input-field"
-                    />
+                    <label className="block text-xs font-bold text-slate-500 mb-1 uppercase">Cost Saved (€)</label>
+                    <input type="number" name="costSaved" value={form.costSaved} onChange={handleChange} className="input-field" />
                   </div>
                 </div>
+                <textarea name="outcomesAndBenefits" value={form.outcomesAndBenefits} onChange={handleChange} placeholder="Detailed outcomes..." className="input-field" />
               </div>
 
-              {/* Image / Document Upload */}
+              {/* Attached Documents (Formerly Images + Docs) */}
               <div>
-                <label className="block text-sm font-semibold text-slate-700 mb-2">
-                  Attachments <span className="text-xs text-slate-400 font-normal">(max 5 files, images/pdfs/docs/exe/py)</span>
-                </label>
-                <input
-                  ref={fileInputRef}
-                  type="file"
-                  accept="image/*,.pdf,.doc,.docx,.exe,.zip,.py,.pptx"
-                  multiple
-                  onChange={handleImageSelect}
-                  className="hidden"
-                />
-                <button
-                  type="button"
-                  onClick={() => fileInputRef.current?.click()}
-                  className="w-full border-2 border-dashed border-gray-200 hover:border-primary-400
-                             rounded-xl p-4 text-center transition-colors group cursor-pointer"
-                >
-                  <ImagePlus className="w-6 h-6 text-gray-400 group-hover:text-primary-500 mx-auto mb-1 transition-colors" />
-                  <p className="text-sm text-gray-500 group-hover:text-primary-600">
-                    Click to upload images or documents
-                  </p>
-                </button>
-
-                {/* Image Previews */}
+                <label className="block text-sm font-semibold text-slate-700 mb-2">Attached Documents <span className="text-xs text-slate-400 font-normal">(Images, PDFs, Docs)</span></label>
+                <input ref={documentInputRef} type="file" multiple onChange={handleDocumentSelect} className="hidden" />
+                <div onClick={() => documentInputRef.current?.click()} className="border-2 border-dashed border-gray-200 rounded-2xl p-6 text-center cursor-pointer hover:border-primary-400 transition-colors bg-gray-50 group">
+                  <Upload className="w-8 h-8 text-gray-400 group-hover:text-primary-500 mx-auto mb-2" />
+                  <p className="text-sm text-slate-500">Upload Images & Documentation</p>
+                </div>
+                {/* Legacy Images (if any) */}
                 {images.length > 0 && (
-                  <div className="grid grid-cols-3 sm:grid-cols-5 gap-3 mt-3">
-                    {images.map((src, i) => {
-                      const displaySrc = typeof src === 'string' ? src.split('###')[0] : src;
-                      const originalName = typeof src === 'string' ? src.split('###')[1] || src : src;
-                      const actualIsImg = isImage(originalName);
-
-                      return (
-                      <div key={i} className="relative group/img aspect-square rounded-xl overflow-hidden border border-gray-200 bg-gray-50 flex items-center justify-center cursor-pointer">
-                        {actualIsImg ? (
-                          <img
-                            src={displaySrc}
-                            alt={`Preview ${i + 1}`}
-                            className="w-full h-full object-cover"
-                          />
-                        ) : (
-                          <div className="flex flex-col items-center justify-center p-2 text-primary-500">
-                            <FileIcon className="w-8 h-8 mb-1" />
-                            <span className="text-[10px] truncate w-full text-center px-1 font-semibold text-slate-500">
-                              {originalName.split('/').pop().slice(0, 15)}
-                            </span>
-                          </div>
-                        )}
-                        <button
-                          type="button"
-                          onClick={(e) => {
-                             e.stopPropagation();
-                             e.preventDefault();
-                             removeImage(i);
-                          }}
-                          className="absolute top-1 right-1 bg-red-500 text-white p-1 rounded-lg
-                                     opacity-0 group-hover/img:opacity-100 transition-opacity shadow-md z-10"
-                        >
-                          <Trash2 className="w-3 h-3" />
-                        </button>
+                   <div className="grid grid-cols-4 gap-2 mt-3 mb-3">
+                     {images.map((src, i) => (
+                       <div key={i} className="relative aspect-video rounded-xl overflow-hidden border bg-white group/img">
+                         {isImage(src) ? (
+                           <img src={src} className="w-full h-full object-cover" />
+                         ) : (
+                           <div className="w-full h-full flex items-center justify-center bg-slate-50 text-slate-400">
+                             <FileIcon className="w-6 h-6" />
+                           </div>
+                         )}
+                         <button type="button" onClick={() => removeImage(i)} className="absolute top-1 right-1 bg-red-500 text-white p-1 rounded-lg opacity-0 group-hover/img:opacity-100 transition-opacity shadow-lg"><Trash2 className="w-3.5 h-3.5" /></button>
+                       </div>
+                     ))}
+                   </div>
+                )}
+                {/* New Documents Section */}
+                {documents.length > 0 && (
+                  <div className="space-y-2 mt-3">
+                    {documents.map((val, i) => (
+                      <div key={i} className="flex items-center justify-between p-3 bg-slate-50 border rounded-xl group/item">
+                        <div className="flex items-center gap-3 overflow-hidden">
+                          {isImage(val) ? (
+                            <div className="w-10 h-10 rounded-lg overflow-hidden border border-gray-200 shrink-0">
+                               <img src={val} className="w-full h-full object-cover" />
+                            </div>
+                          ) : (
+                            <FileIcon className="w-5 h-5 text-primary-500 shrink-0" />
+                          )}
+                          <span className="text-xs font-bold text-slate-700 truncate">{val.split('/').pop()}</span>
+                        </div>
+                        <button type="button" onClick={() => removeDocument(i)} className="text-red-500 hover:bg-red-50 p-1.5 rounded-lg opacity-0 group-hover/item:opacity-100 transition-opacity"><Trash2 className="w-4 h-4" /></button>
                       </div>
-                      );
-                    })}
+                    ))}
                   </div>
                 )}
               </div>
 
-              {/* Submit Button */}
-              <div className="flex gap-3 pt-2">
-                <button
-                  type="button"
-                  onClick={onClose}
-                  className="btn-secondary flex-1"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  disabled={loading}
-                  className="btn-primary flex-1 flex items-center justify-center gap-2"
-                >
-                  {loading ? (
-                    <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                  ) : (
-                    <>
-                      <Send className="w-4 h-4" />
-                      {initialData ? 'Save Changes' : 'Submit Idea'}
-                    </>
-                  )}
+              {/* Solution Assets (Technical) */}
+              <div>
+                <label className="block text-sm font-semibold text-slate-700 mb-2">Solution Assets <span className="text-xs text-slate-400 font-normal">(ZIP, EXE, PY, etc.)</span></label>
+                <input ref={artefactInputRef} type="file" multiple onChange={handleArtefactSelect} className="hidden" />
+                <div onClick={() => artefactInputRef.current?.click()} className="border-2 border-dashed border-gray-200 rounded-2xl p-6 text-center cursor-pointer hover:border-indigo-400 transition-colors bg-gray-50 group">
+                  <Upload className="w-8 h-8 text-gray-400 group-hover:text-indigo-500 mx-auto mb-2" />
+                  <p className="text-sm text-slate-500">Upload Technical Assets</p>
+                </div>
+                {artefacts.length > 0 && (
+                  <div className="space-y-2 mt-3">
+                    {artefacts.map((val, i) => (
+                      <div key={i} className="flex items-center justify-between p-3 bg-slate-50 border rounded-xl group/item">
+                        <div className="flex items-center gap-3 overflow-hidden">
+                          {isImage(val) ? (
+                            <div className="w-10 h-10 rounded-lg overflow-hidden border border-gray-200 shrink-0">
+                               <img src={val} className="w-full h-full object-cover" />
+                            </div>
+                          ) : (
+                            <FileIcon className="w-5 h-5 text-indigo-500 shrink-0" />
+                          )}
+                          <span className="text-xs font-bold text-slate-700 truncate">{val.split('/').pop()}</span>
+                        </div>
+                        <button type="button" onClick={() => removeArtefact(i)} className="text-red-500 hover:bg-red-50 p-1.5 rounded-lg opacity-0 group-hover/item:opacity-100 transition-opacity"><Trash2 className="w-4 h-4" /></button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              {/* Submit */}
+              <div className="flex gap-3 pt-4">
+                <button type="button" onClick={onClose} className="btn-secondary flex-1">Cancel</button>
+                <button type="submit" disabled={loading} className="btn-primary flex-1 flex items-center justify-center gap-2">
+                  {loading ? <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" /> : <><Send className="w-4 h-4" /> {initialData ? 'Save Changes' : 'Submit Idea'}</>}
                 </button>
               </div>
+
             </form>
           </motion.div>
         </motion.div>

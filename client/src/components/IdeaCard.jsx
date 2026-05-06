@@ -58,7 +58,17 @@ export default function IdeaCard({ idea, index }) {
             <Lightbulb className={`w-7 h-7 ${catConfig.text}`} />
           </div>
         )}
-        <StatusBadge status={idea.status} />
+        <div className="flex flex-col items-end gap-2.5">
+          <StatusBadge status={idea.status} />
+          {(idea.classification || 'Automation') && (
+            <div className={`px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-[0.1em] shadow-sm border
+              ${(idea.classification || 'Automation') === 'AI' 
+                ? 'bg-violet-600 text-white border-violet-700' 
+                : 'bg-emerald-600 text-white border-emerald-700'}`}>
+              {idea.classification || 'Automation'}
+            </div>
+          )}
+        </div>
       </div>
 
       {/* Tags: Category & Priority & Feasibility */}

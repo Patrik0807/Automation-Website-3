@@ -2,7 +2,7 @@ import { Search } from 'lucide-react';
 
 /** Must match function-of-project categories */
 const categories = ['All', 'Project engineering', 'Sales engineering', 'ASRS', 'Integration', 'IT Delivery', 'Test and Deployment', 'Other'];
-const statuses   = ['All', 'Submitted', 'Approved', 'In Progress', 'Implemented', 'Rejected'];
+const statuses   = ['All', 'Submitted', 'Approved', 'In Progress', 'Testing/Validating', 'Implemented'];
 
 export default function FilterBar({ filters, setFilters }) {
   const handleChange = (key, value) => {

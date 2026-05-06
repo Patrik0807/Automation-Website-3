@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useAuth } from '../context/AuthContext';
@@ -54,6 +54,24 @@ export default function Navbar() {
   const location = useLocation();
   const [showProfile, setShowProfile] = useState(false);
   const [showMobile, setShowMobile] = useState(false);
+  const profileRef = useRef(null);
+
+  // Close dropdowns on route change
+  useEffect(() => {
+    setShowProfile(false);
+    setShowMobile(false);
+  }, [location.pathname]);
+
+  // Close on click outside
+  useEffect(() => {
+    function handleClickOutside(event) {
+      if (profileRef.current && !profileRef.current.contains(event.target)) {
+        setShowProfile(false);
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
 
   const handleLogout = () => {
     logout();
@@ -110,7 +128,7 @@ export default function Navbar() {
                   </span>
                 )}
 
-                <div className="relative">
+                <div className="relative" ref={profileRef}>
                   <button
                     onClick={() => setShowProfile(!showProfile)}
                     className="flex items-center gap-2.5 bg-white hover:bg-gray-50 border border-gray-200
