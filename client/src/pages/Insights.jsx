@@ -101,8 +101,8 @@ export default function Insights() {
                     data={statusData}
                     cx="50%"
                     cy="50%"
-                    innerRadius={60}
-                    outerRadius={100}
+                    innerRadius={70}
+                    outerRadius={125}
                     paddingAngle={5}
                     dataKey="value"
                   >

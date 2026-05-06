@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo } from 'react';
+import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import { motion, AnimatePresence } from 'framer-motion';
 
@@ -40,6 +41,7 @@ export default function IdeasTable() {
   const [searchTerm, setSearchTerm] = useState('');
   const [sortConfig, setSortConfig] = useState(SORT_OPTIONS[0]);
   const [showSortDropdown, setShowSortDropdown] = useState(false);
+  const navigate = useNavigate();
 
   useEffect(() => {
     fetchIdeas();
@@ -229,14 +231,14 @@ export default function IdeasTable() {
                 <th className="px-8 py-6 min-w-[300px]">Idea Title</th>
                 <th className="px-8 py-6 w-40">Status</th>
                 <th className="px-6 py-6 w-32">Date</th>
-                <th className="px-6 py-6 text-right">View</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-50">
               {sortedAndFilteredIdeas.map((idea, idx) => (
                 <tr
                   key={idea._id}
-                  className={`group transition-colors ${idx % 2 === 1 ? 'bg-slate-50/30' : 'bg-white'} hover:bg-primary-50/30`}
+                  onClick={() => navigate(`/ideas/${idea._id}`)}
+                  className={`group transition-colors cursor-pointer ${idx % 2 === 1 ? 'bg-slate-50/30' : 'bg-white'} hover:bg-primary-50 border-b border-gray-100`}
                 >
                   <td className="px-6 py-6 whitespace-nowrap min-w-fit">
                     <span className="font-mono text-sm font-black text-primary-600 bg-primary-50 px-3 py-1.5 rounded-lg border border-primary-100 block w-fit">
@@ -248,7 +250,7 @@ export default function IdeasTable() {
                       ${idea.classification === 'AI' 
                         ? 'bg-violet-50 text-violet-700 border-violet-100' 
                         : 'bg-emerald-50 text-emerald-700 border-emerald-100'}`}>
-                      {idea.classification === 'AI' ? 'AI' : 'Auto'}
+                      {idea.classification === 'AI' ? 'AI' : 'Automation'}
                     </span>
                   </td>
                   <td className="px-8 py-6">
@@ -271,19 +273,7 @@ export default function IdeasTable() {
                       <span className="text-slate-900 font-bold text-sm">
                         {format(new Date(idea.createdAt), 'MMM dd, yyyy')}
                       </span>
-                      {/* <span className="text-slate-400 text-[10px] font-bold uppercase tracking-wider">
-                        {format(new Date(idea.createdAt), 'hh:mm a')}
-                      </span> */}
                     </div>
-                  </td>
-                  <td className="px-8 py-6 text-right">
-                    <a
-                      href={`/ideas/${idea._id}`}
-                      className="inline-flex items-center justify-center w-10 h-10 rounded-xl bg-slate-100 text-slate-400 
-                                 group-hover:bg-primary-600 group-hover:text-white transition-all shadow-sm"
-                    >
-                      <ChevronRight className="w-5 h-5" />
-                    </a>
                   </td>
                 </tr>
               ))}

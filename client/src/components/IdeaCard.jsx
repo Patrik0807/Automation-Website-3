@@ -32,8 +32,8 @@ export default function IdeaCard({ idea, index }) {
       animate={{ opacity: 1, y: 0 }}
       transition={{ delay: index * 0.08, duration: 0.5, ease: 'easeOut' }}
       whileHover={{ y: -6, transition: { duration: 0.2 } }}
-      onClick={() => navigate(`/ideas/${idea.id}`)}
-      className="group p-6 rounded-[2rem] bg-white border border-black-1500 shadow-sm hover:shadow-2xl hover:border-gray-200 transition-all duration-300 relative overflow-hidden flex flex-col h-full cursor-pointer"
+      onClick={() => navigate(`/ideas/${idea._id}`)}
+      className="group p-6 rounded-[2rem] bg-white border border-gray-200 shadow-sm hover:shadow-2xl hover:border-gray-300 transition-all duration-300 relative overflow-hidden flex flex-col h-full cursor-pointer"
     >
       {/* Decorative Top-Right Mesh Overlay */}
       <div className="absolute top-0 right-0 w-32 h-32 bg-gradient-to-br from-primary-500/10 to-transparent rounded-bl-[100px] pointer-events-none opacity-50 group-hover:opacity-100 group-hover:scale-110 transition-all duration-500" />
