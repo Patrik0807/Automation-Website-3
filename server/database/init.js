@@ -146,6 +146,9 @@ db.serialize(() => {
       // Role Migration: Legacy to New Convention (Director)
       db.run("UPDATE team_members SET type = 'Director' WHERE type IN ('director', 'executive_director', 'Executive Director')");
       db.run("UPDATE team_members SET type = 'Group Leader' WHERE type IN ('team_leader', 'group_leader', 'Group Leader')");
+
+      // Idea Status Migration
+      db.run("UPDATE ideas SET status = 'Validation' WHERE status IN ('Testing/Validating', 'Validation Phase')");
     }
   });
 });

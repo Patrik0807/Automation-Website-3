@@ -7,7 +7,7 @@ const PIPELINE_STAGES = [
   'Submitted',
   'Approved',
   'In Progress',
-  'Testing/Validating',
+  'Validation',
   'Implemented',
   'Rejected'
 ];
@@ -47,6 +47,14 @@ function parsePipeline(pipelineJson, currentStatus, submissionDate) {
       deadline: null
     });
   }
+
+  // On-the-fly migration: Rename Testing/Validating to Validation
+  pipeline = pipeline.map(s => {
+    if (s.status === 'Testing/Validating' || s.status === 'Validation Phase') {
+      return { ...s, status: 'Validation' };
+    }
+    return s;
+  });
 
   return pipeline;
 }

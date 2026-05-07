@@ -21,7 +21,7 @@ const statusConfig = {
     border: 'border-amber-200',
     dot:    'bg-amber-500',
   },
-  'Testing/Validating': {
+  'Validation': {
     bg:     'bg-purple-50',
     text:   'text-purple-700',
     border: 'border-purple-200',
